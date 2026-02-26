@@ -252,9 +252,8 @@
 </button>
 
 <div id="toast"></div>
-
-        <script>
-const ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjY3ZTM0ODI5YjQ2NDFmYTEyODZiYmY0MDNjMWM2YWI2NjNhNGUwMWRlZTUwNTVmMTAyNGQwMTYwIiwiaCI6Im11cm11cjY0In0=";
+<script>
+const ORS_KEY = "PUT_YOUR_NEW_ORS_KEY_HERE";
 const HIKING_KMH = 4;
 
 let points = [];
@@ -264,7 +263,7 @@ let currentRoute = null;
 let usedFallback = false;
 let isSatellite = false;
 
-/* ---------------- MAP SETUP ---------------- */
+/* ---------------- MAP STYLES ---------------- */
 
 const osmStyle = {
   version: 8,
@@ -303,18 +302,34 @@ map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
 map.addControl(new maplibregl.ScaleControl(), 'bottom-left');
 
 map.on('load', () => {
-  map.addSource('route', {
-    type: 'geojson',
-    data: emptyFeature()
-  });
+  map.addSource('route', { type: 'geojson', data: emptyFeature() });
 
   map.addLayer({
     id: 'route-line',
     type: 'line',
     source: 'route',
+    paint: { 'line-width': 4, 'line-color': '#d4a843' }
+  });
+
+  map.addSource('markers', {
+    type: 'geojson',
+    data: emptyFeatureCollection()
+  });
+
+  map.addLayer({
+    id: 'marker-points',
+    type: 'circle',
+    source: 'markers',
     paint: {
-      'line-width': 4,
-      'line-color': '#d4a843'
+      'circle-radius': 7,
+      'circle-color': [
+        'case',
+        ['==', ['get', 'role'], 'start'], '#4ade80',
+        ['==', ['get', 'role'], 'end'], '#e11d48',
+        '#d4a843'
+      ],
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#1a1a18'
     }
   });
 });
@@ -330,8 +345,6 @@ map.on('click', async e => {
 /* ---------------- ROUTING ---------------- */
 
 async function doRoute(pts) {
-  if (pts.length < 2) return;
-
   try {
     const res = await fetch(
       "https://api.openrouteservice.org/v2/directions/foot-hiking/geojson",
@@ -349,8 +362,7 @@ async function doRoute(pts) {
     );
 
     if (!res.ok) {
-      const err = await res.json();
-      console.error("ORS error:", err);
+      console.error(await res.json());
       fallbackRoute(pts);
       return;
     }
@@ -363,7 +375,6 @@ async function doRoute(pts) {
     usedFallback = false;
 
     paintRoute();
-
     updateStats({
       distance: summary.distance,
       time: summary.duration * 1000,
@@ -374,14 +385,12 @@ async function doRoute(pts) {
     drawElevation(feature.geometry.coordinates);
 
   } catch (err) {
-    console.error("Routing failed:", err);
+    console.error(err);
     fallbackRoute(pts);
   }
 
   updateButtons();
 }
-
-/* ---------------- FALLBACK ---------------- */
 
 function fallbackRoute(pts) {
   usedFallback = true;
@@ -396,14 +405,67 @@ function fallbackRoute(pts) {
   showToast("No trail data — showing straight line");
 }
 
-/* ---------------- HELPERS ---------------- */
+/* ---------------- MARKERS ---------------- */
 
-function paintRoute() {
-  map.getSource('route').setData({
-    type: 'Feature',
-    geometry: currentRoute
+function updateMarkers() {
+  if (!map.getSource('markers')) return;
+
+  map.getSource('markers').setData({
+    type: 'FeatureCollection',
+    features: points.map((p, i) => ({
+      type: 'Feature',
+      properties: {
+        role:
+          i === 0 ? 'start'
+          : i === points.length - 1 ? 'end'
+          : 'mid'
+      },
+      geometry: {
+        type: 'Point',
+        coordinates: [p.lng, p.lat]
+      }
+    }))
   });
 }
+
+/* ---------------- STATE ---------------- */
+
+function applyPoints(newPts, save = false) {
+  if (save) {
+    undoStack.push(JSON.parse(JSON.stringify(points)));
+    redoStack = [];
+  }
+  points = newPts;
+  updateMarkers();
+  updateWaypointList();
+  updateButtons();
+}
+
+/* ---------------- WAYPOINT LIST ---------------- */
+
+function updateWaypointList() {
+  const list = document.getElementById('waypoints-list');
+  if (!list) return;
+
+  list.innerHTML = '';
+
+  if (!points.length) {
+    list.innerHTML =
+      '<div style="font-size:10px;color:var(--text-dim);">No waypoints yet.</div>';
+    return;
+  }
+
+  points.forEach((p, i) => {
+    const div = document.createElement('div');
+    div.className = 'waypoint-item';
+    div.innerHTML =
+      `<div class="wp-num">${i + 1}</div>
+       <div class="wp-coords">${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}</div>`;
+    list.appendChild(div);
+  });
+}
+
+/* ---------------- HELPERS ---------------- */
 
 function computeStraightStats(pts) {
   let km = 0;
@@ -431,40 +493,19 @@ function haversine(a, b) {
   return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
 }
 
-function updateStats(path) {
-  const set = (id, html) =>
-    document.getElementById(id).innerHTML = html;
-
-  if (!path) {
-    ['stat-dist', 'stat-time', 'stat-asc', 'stat-desc']
-      .forEach(id => set(id, '—'));
-    return;
-  }
-
-  const km = (path.distance / 1000).toFixed(2);
-  const mins = Math.round(path.time / 60000);
-
-  set('stat-dist', `${km} <span>km</span>`);
-  set('stat-time',
-    mins < 60
-      ? `${mins} <span>min</span>`
-      : `${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, '0')} <span>m</span>`
-  );
-
-  if (path.ascend != null) {
-    set('stat-asc', `${Math.round(path.ascend)} <span>m</span>`);
-    set('stat-desc', `${Math.round(path.descend)} <span>m</span>`);
-  } else {
-    set('stat-asc', 'N/A');
-    set('stat-desc', 'N/A');
-  }
+function paintRoute() {
+  map.getSource('route').setData({
+    type: 'Feature',
+    geometry: currentRoute
+  });
 }
 
 function emptyFeature() {
-  return {
-    type: 'Feature',
-    geometry: { type: 'LineString', coordinates: [] }
-  };
+  return { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } };
+}
+
+function emptyFeatureCollection() {
+  return { type: 'FeatureCollection', features: [] };
 }
 
 function showToast(msg) {
@@ -474,17 +515,11 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-function applyPoints(newPts, save = false) {
-  if (save) {
-    undoStack.push(JSON.parse(JSON.stringify(points)));
-    redoStack = [];
-  }
-  points = newPts;
-}
-
 function updateButtons() {}
-function drawElevation() {}
 
-        </script>
+</script>
+  
+
+  
 </body>
 </html>
