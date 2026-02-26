@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Trail Planner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #1a1a18;
+      --panel: #222220;
+      --border: #333330;
+      --amber: #d4a843;
+      --amber-dim: #a07d2a;
+      --red: #e11d48;
+      --text: #e8e4d8;
+      --text-dim: #888880;
+      --green: #4ade80;
+      --panel-w: 300px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Mono', monospace;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    #map {
+      position: fixed;
+      inset: 0;
+      left: var(--panel-w);
+    }
+
+    /* ── SIDE PANEL ── */
+    #panel {
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      width: var(--panel-w);
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      z-index: 100;
+      overflow: hidden;
+    }
+
+    #panel-header {
+      padding: 20px 16px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #panel-header h1 {
+      font-family: 'Fraunces', serif;
+      font-weight: 600;
+      font-size: 22px;
+      color: var(--amber);
+      letter-spacing: -0.5px;
+    }
+
+    #panel-header p {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    /* ── STATS ── */
+    #stats {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .stat {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 10px 8px;
+    }
+
+    .stat-label {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .stat-value span {
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    /* ── TOOLBAR ── */
+    #toolbar {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toolbar-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 7px 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+    }
+
+    .btn:hover:not(:disabled) {
+      background: #2a2a28;
+      border-color: var(--amber-dim);
+      color: var(--amber);
+    }
+
+    .btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .btn.danger:hover:not(:disabled) {
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    .btn.active {
+      background: var(--amber);
+      color: var(--bg);
+      border-color: var(--amber);
+      font-weight: 500;
+    }
+
+    .btn svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+    /* ── EXPORT ── */
+    #export-section {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-title {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+
+    /* ── ELEVATION CHART ── */
+    #elevation-section {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    #elevation-canvas {
+      width: 100%;
+      height: 80px;
+      display: block;
+      border-radius: 4px;
+      background: var(--bg);
+    }
+
+    .elev-empty {
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: var(--text-dim);
+      background: var(--bg);
+      border-radius: 4px;
+      border: 1px dashed var(--border);
+      letter-spacing: 0.05em;
+    }
+
+    /* ── WAYPOINTS ── */
+    #waypoints-section {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+    }
+
+    #waypoints-section::-webkit-scrollbar { width: 4px; }
+    #waypoints-section::-webkit-scrollbar-track { background: transparent; }
+    #waypoints-section::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .waypoint-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      margin-bottom: 5px;
+      font-size: 10px;
+      color: var(--text-dim);
+      background: var(--bg);
+      cursor: default;
+      transition: border-color 0.15s;
+    }
+
+    .waypoint-item:hover { border-color: var(--amber-dim); }
+
+    .wp-num {
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: var(--amber);
+      color: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+
+    .wp-coords { flex: 1; }
+    .wp-remove {
+      background: none; border: none; color: var(--text-dim);
+      cursor: pointer; font-size: 14px; line-height: 1;
+      padding: 0 2px;
+      transition: color 0.15s;
+    }
+    .wp-remove:hover { color: var(--red); }
+
+    /* ── MAP CONTROLS ── */
+    .map-btn {
+      position: absolute;
+      z-index: 10;
+      padding: 8px 12px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .map-btn:hover { background: #2e2e2c; border-color: var(--amber-dim); color: var(--amber); }
+    .map-btn.active { background: var(--amber); color: var(--bg); border-color: var(--amber); }
+    .map-btn svg { width: 13px; height: 13px; }
+
+    #btn-satellite { top: 12px; right: 12px; }
+    #btn-locate    { top: 52px; right: 12px; }
+
+    /* ── STATUS TOAST ── */
+    #toast {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(60px);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      opacity: 0;
+      z-index: 200;
+      white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+    /* ── MAPLIBRE OVERRIDES ── */
+    .maplibregl-ctrl-bottom-right { right: 0; }
+    .maplibregl-ctrl-bottom-left { left: 0; }
+  </style>
+</head>
+<body>
+
+<div id="panel">
+  <div id="panel-header">
+    <h1>Trail Planner</h1>
+    <p>Click map to place waypoints</p>
+  </div>
+
+  <div id="stats">
+    <div class="stat">
+      <div class="stat-label">Distance</div>
+      <div class="stat-value" id="stat-dist">—</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Est. Time</div>
+      <div class="stat-value" id="stat-time">—</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">↑ Ascent</div>
+      <div class="stat-value" id="stat-asc">—</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">↓ Descent</div>
+      <div class="stat-value" id="stat-desc">—</div>
+    </div>
+  </div>
+
+  <div id="toolbar">
+    <div class="toolbar-row">
+      <button class="btn" id="btn-undo" disabled title="Undo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+        Undo
+      </button>
+      <button class="btn" id="btn-redo" disabled title="Redo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg>
+        Redo
+      </button>
+      <button class="btn danger" id="btn-clear" disabled title="Clear all">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        Clear
+      </button>
+    </div>
+  </div>
+
+  <div id="export-section">
+    <div class="section-title">Export</div>
+    <div class="toolbar-row">
+      <button class="btn" id="btn-gpx" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        GPX
+      </button>
+      <button class="btn" id="btn-geojson" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        GeoJSON
+      </button>
+    </div>
+  </div>
+
+  <div id="elevation-section">
+    <div class="section-title">Elevation Profile</div>
+    <div id="elevation-container">
+      <div class="elev-empty" id="elev-empty">Add points to see profile</div>
+      <canvas id="elevation-canvas" style="display:none;"></canvas>
+    </div>
+  </div>
+
+  <div id="waypoints-section">
+    <div class="section-title">Waypoints</div>
+    <div id="waypoints-list"></div>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<!-- Map overlay buttons -->
+<button class="map-btn" id="btn-satellite">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+  Satellite
+</button>
+<button class="map-btn" id="btn-locate">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg>
+  Locate Me
+</button>
+
+<div id="toast"></div>
+
+<script>
+const GRAPHHOPPER_KEY = "60e48bae-2871-4d6c-9d2b-785d84fecc58";
+const ROUTE_PROFILE = "foot";
+
+// ── History stacks ──
+let points = [];
+let undoStack = [[]]; // snapshots
+let redoStack = [];
+let currentRoute = null; // last fetched route GeoJSON geometry
+let elevationData = []; // array of elevation values along route
+let isSatellite = false;
+
+// ── Map init ──
+const osmStyle = {
+  version: 8,
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }
+  },
+  layers: [{ id: 'osm-tiles', type: 'raster', source: 'osm' }]
+};
+
+const satStyle = {
+  version: 8,
+  sources: {
+    sat: {
+      type: 'raster',
+      tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+      tileSize: 256,
+      attribution: '© Esri, Maxar, Earthstar Geographics'
+    }
+  },
+  layers: [{ id: 'sat-tiles', type: 'raster', source: 'sat' }]
+};
+
+const map = new maplibregl.Map({
+  container: 'map',
+  style: osmStyle,
+  center: [8.5417, 47.3769],
+  zoom: 13
+});
+
+map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+map.addControl(new maplibregl.ScaleControl(), 'bottom-left');
+
+function addMapLayers() {
+  if (!map.getSource('route')) {
+    map.addSource('route', { type: 'geojson', data: emptyFeature() });
+    map.addLayer({
+      id: 'route-line-bg',
+      type: 'line', source: 'route',
+      paint: { 'line-width': 8, 'line-color': '#1a1a18', 'line-opacity': 0.4 }
+    });
+    map.addLayer({
+      id: 'route-line',
+      type: 'line', source: 'route',
+      paint: { 'line-width': 3.5, 'line-color': '#d4a843' }
+    });
+  }
+  if (!map.getSource('markers')) {
+    map.addSource('markers', { type: 'geojson', data: emptyFeatureCollection() });
+    map.addLayer({
+      id: 'marker-points',
+      type: 'circle', source: 'markers',
+      paint: {
+        'circle-radius': 7,
+        'circle-color': ['case', ['==', ['get', 'index'], 0], '#4ade80',
+          ['==', ['get', 'last'], true], '#e11d48', '#d4a843'],
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#1a1a18'
+      }
+    });
+  }
+}
+
+map.on('load', addMapLayers);
+
+// ── Satellite toggle ──
+document.getElementById('btn-satellite').addEventListener('click', () => {
+  isSatellite = !isSatellite;
+  document.getElementById('btn-satellite').classList.toggle('active', isSatellite);
+  map.setStyle(isSatellite ? satStyle : osmStyle);
+  map.once('styledata', () => {
+    addMapLayers();
+    updateMarkers();
+    if (currentRoute) updateRoute(currentRoute);
+  });
+});
+
+// ── Locate me ──
+document.getElementById('btn-locate').addEventListener('click', () => {
+  if (!navigator.geolocation) { showToast('Geolocation not supported'); return; }
+  document.getElementById('btn-locate').classList.add('active');
+  navigator.geolocation.getCurrentPosition(pos => {
+    map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 14 });
+    document.getElementById('btn-locate').classList.remove('active');
+  }, () => {
+    showToast('Could not get location');
+    document.getElementById('btn-locate').classList.remove('active');
+  });
+});
+
+// ── Click to add point ──
+map.on('click', async (e) => {
+  const newPoints = [...points, { lat: e.lngLat.lat, lng: e.lngLat.lng }];
+  applyPoints(newPoints, true);
+  if (newPoints.length >= 2) await doRoute(newPoints);
+});
+
+// ── History helpers ──
+function saveSnapshot() {
+  undoStack.push(JSON.parse(JSON.stringify(points)));
+  redoStack = [];
+  updateHistoryButtons();
+}
+
+function applyPoints(newPts, save = false) {
+  if (save) {
+    undoStack.push(JSON.parse(JSON.stringify(points)));
+    redoStack = [];
+  }
+  points = newPts;
+  updateMarkers();
+  updateWaypointList();
+  updateHistoryButtons();
+  if (points.length < 2) {
+    clearRoute();
+    updateStats(null);
+  }
+}
+
+document.getElementById('btn-undo').addEventListener('click', async () => {
+  if (undoStack.length <= 1) return;
+  redoStack.push(JSON.parse(JSON.stringify(points)));
+  const prev = undoStack.pop();
+  points = prev;
+  updateMarkers();
+  updateWaypointList();
+  updateHistoryButtons();
+  if (points.length >= 2) await doRoute(points);
+  else { clearRoute(); updateStats(null); }
+});
+
+document.getElementById('btn-redo').addEventListener('click', async () => {
+  if (!redoStack.length) return;
+  undoStack.push(JSON.parse(JSON.stringify(points)));
+  const next = redoStack.pop();
+  points = next;
+  updateMarkers();
+  updateWaypointList();
+  updateHistoryButtons();
+  if (points.length >= 2) await doRoute(points);
+  else { clearRoute(); updateStats(null); }
+});
+
+document.getElementById('btn-clear').addEventListener('click', () => {
+  if (!points.length) return;
+  applyPoints([], true);
+  clearRoute();
+  updateStats(null);
+  showToast('Route cleared');
+});
+
+function updateHistoryButtons() {
+  document.getElementById('btn-undo').disabled = undoStack.length <= 1;
+  document.getElementById('btn-redo').disabled = redoStack.length === 0;
+  const hasPoints = points.length > 0;
+  document.getElementById('btn-clear').disabled = !hasPoints;
+  document.getElementById('btn-gpx').disabled = !currentRoute;
+  document.getElementById('btn-geojson').disabled = !currentRoute;
+}
+
+// ── Routing ──
+async function doRoute(pts) {
+  const params = new URLSearchParams({
+    profile: ROUTE_PROFILE,
+    points_encoded: 'false',
+    elevation: 'true',
+    key: GRAPHHOPPER_KEY
+  });
+  pts.forEach(p => params.append('point', `${p.lat},${p.lng}`));
+
+  try {
+    const res = await fetch(`https://graphhopper.com/api/1/route?${params}`);
+    const json = await res.json();
+    if (!json.paths || !json.paths[0]) { showToast('No route found'); return; }
+    const path = json.paths[0];
+    currentRoute = path.points;
+    updateRoute(currentRoute);
+    updateStats(path);
+    drawElevation(path.points.coordinates);
+    updateHistoryButtons();
+  } catch (err) {
+    console.error(err);
+    showToast('Routing error');
+  }
+}
+
+function clearRoute() {
+  currentRoute = null;
+  if (map.getSource('route')) map.getSource('route').setData(emptyFeature());
+  elevationData = [];
+  drawElevation(null);
+  updateHistoryButtons();
+}
+
+function updateRoute(geometry) {
+  if (map.getSource('route')) map.getSource('route').setData({ type: 'Feature', geometry });
+}
+
+function updateMarkers() {
+  if (!map.getSource('markers')) return;
+  map.getSource('markers').setData({
+    type: 'FeatureCollection',
+    features: points.map((p, i) => ({
+      type: 'Feature',
+      properties: { index: i, last: i === points.length - 1 },
+      geometry: { type: 'Point', coordinates: [p.lng, p.lat] }
+    }))
+  });
+}
+
+// ── Stats ──
+function updateStats(path) {
+  const distEl = document.getElementById('stat-dist');
+  const timeEl = document.getElementById('stat-time');
+  const ascEl  = document.getElementById('stat-asc');
+  const descEl = document.getElementById('stat-desc');
+
+  if (!path) {
+    distEl.textContent = timeEl.textContent = ascEl.textContent = descEl.textContent = '—';
+    return;
+  }
+
+  const distKm = (path.distance / 1000).toFixed(2);
+  distEl.innerHTML = `${distKm} <span>km</span>`;
+
+  const mins = Math.round(path.time / 60000);
+  if (mins < 60) {
+    timeEl.innerHTML = `${mins} <span>min</span>`;
+  } else {
+    const h = Math.floor(mins / 60), m = mins % 60;
+    timeEl.innerHTML = `${h}h${m.toString().padStart(2,'0')} <span>m</span>`;
+  }
+
+  if (path.ascend != null) {
+    ascEl.innerHTML  = `${Math.round(path.ascend)} <span>m</span>`;
+    descEl.innerHTML = `${Math.round(path.descend)} <span>m</span>`;
+  } else {
+    ascEl.textContent = descEl.textContent = 'N/A';
+  }
+}
+
+// ── Elevation chart ──
+function drawElevation(coords) {
+  const canvas = document.getElementById('elevation-canvas');
+  const empty  = document.getElementById('elev-empty');
+
+  if (!coords || coords.length === 0) {
+    canvas.style.display = 'none';
+    empty.style.display = 'flex';
+    return;
+  }
+
+  // coords: [lng, lat, elev]
+  const elevs = coords.map(c => c[2]).filter(e => e != null);
+  if (!elevs.length) { canvas.style.display = 'none'; empty.style.display = 'flex'; return; }
+
+  canvas.style.display = 'block';
+  empty.style.display = 'none';
+
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.parentElement.clientWidth - 32;
+  const H = 80;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const minE = Math.min(...elevs), maxE = Math.max(...elevs);
+  const range = maxE - minE || 1;
+  const pad = { top: 10, bottom: 18, left: 28, right: 8 };
+  const cw = W - pad.left - pad.right;
+  const ch = H - pad.top - pad.bottom;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Gradient fill
+  const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + ch);
+  grad.addColorStop(0, 'rgba(212,168,67,0.35)');
+  grad.addColorStop(1, 'rgba(212,168,67,0.03)');
+
+  ctx.beginPath();
+  elevs.forEach((e, i) => {
+    const x = pad.left + (i / (elevs.length - 1)) * cw;
+    const y = pad.top + ch - ((e - minE) / range) * ch;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.lineTo(pad.left + cw, pad.top + ch);
+  ctx.lineTo(pad.left, pad.top + ch);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  elevs.forEach((e, i) => {
+    const x = pad.left + (i / (elevs.length - 1)) * cw;
+    const y = pad.top + ch - ((e - minE) / range) * ch;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#d4a843';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Y-axis labels
+  ctx.fillStyle = '#888880';
+  ctx.font = `${8 * dpr / dpr}px DM Mono, monospace`;
+  ctx.textAlign = 'right';
+  [0, 0.5, 1].forEach(f => {
+    const e = Math.round(minE + f * range);
+    const y = pad.top + ch - f * ch;
+    ctx.fillText(`${e}m`, pad.left - 3, y + 3);
+  });
+}
+
+// ── Waypoint list ──
+function updateWaypointList() {
+  const list = document.getElementById('waypoints-list');
+  list.innerHTML = '';
+  if (!points.length) {
+    list.innerHTML = '<div style="font-size:10px;color:var(--text-dim);letter-spacing:0.05em;">No waypoints yet.</div>';
+    return;
+  }
+  points.forEach((p, i) => {
+    const div = document.createElement('div');
+    div.className = 'waypoint-item';
+    div.innerHTML = `
+      <div class="wp-num">${i + 1}</div>
+      <div class="wp-coords">${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}</div>
+      <button class="wp-remove" title="Remove" data-i="${i}">×</button>`;
+    list.appendChild(div);
+  });
+  list.querySelectorAll('.wp-remove').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const i = parseInt(e.target.dataset.i);
+      const newPts = points.filter((_, idx) => idx !== i);
+      applyPoints(newPts, true);
+      if (newPts.length >= 2) await doRoute(newPts);
+      else { clearRoute(); updateStats(null); }
+    });
+  });
+}
+
+// ── Export ──
+document.getElementById('btn-gpx').addEventListener('click', () => {
+  if (!currentRoute) return;
+  const coords = currentRoute.coordinates;
+  const trkpts = coords.map(c =>
+    `    <trkpt lat="${c[1].toFixed(6)}" lon="${c[0].toFixed(6)}">${c[2] != null ? `<ele>${c[2].toFixed(1)}</ele>` : ''}</trkpt>`
+  ).join('\n');
+  const gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Trail Planner">
+  <trk><name>Route</name><trkseg>
+${trkpts}
+  </trkseg></trk>
+</gpx>`;
+  download('route.gpx', gpx, 'application/gpx+xml');
+  showToast('GPX exported');
+});
+
+document.getElementById('btn-geojson').addEventListener('click', () => {
+  if (!currentRoute) return;
+  const gj = JSON.stringify({ type: 'Feature', properties: {}, geometry: currentRoute }, null, 2);
+  download('route.geojson', gj, 'application/geo+json');
+  showToast('GeoJSON exported');
+});
+
+function download(filename, text, mime) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: mime }));
+  a.download = filename;
+  a.click();
+}
+
+// ── Toast ──
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ── Helpers ──
+function emptyFeature() {
+  return { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } };
+}
+function emptyFeatureCollection() {
+  return { type: 'FeatureCollection', features: [] };
+}
+
+// Init
+updateWaypointList();
+updateHistoryButtons();
+</script>
+</body>
+</html>
