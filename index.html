@@ -351,7 +351,7 @@ async function doRoute(pts) {
       {
         method: "POST",
         headers: {
-          "Authorization": ORS_KEY,
+          "Authorization": `Bearer ${ORS_KEY}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
