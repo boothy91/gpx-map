@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Trail Planner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,600;1,300&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #1a1a18;
+      --panel: #222220;
+      --border: #333330;
+      --amber: #d4a843;
+      --amber-dim: #a07d2a;
+      --red: #e11d48;
+      --text: #e8e4d8;
+      --text-dim: #888880;
+      --green: #4ade80;
+      --panel-w: 300px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body { font-family: 'DM Mono', monospace; background: var(--bg); color: var(--text); overflow: hidden; height: 100dvh; }
+
+    /* ── MAP ── */
+    #map { position: fixed; inset: 0; }
+
+    /* ── DESKTOP: side panel always visible ── */
+    @media (min-width: 600px) {
+      #map { left: var(--panel-w); }
+      #panel {
+        position: fixed; top: 0; left: 0; bottom: 0; width: var(--panel-w);
+        background: var(--panel); border-right: 1px solid var(--border);
+        display: flex; flex-direction: column; z-index: 100; overflow: hidden;
+      }
+      #fab { display: none !important; }
+      #panel-backdrop { display: none !important; }
+      #panel-close { display: none !important; }
+    }
+
+    /* ── MOBILE: slide-in panel + FAB ── */
+    @media (max-width: 599px) {
+      #panel {
+        position: fixed; top: 0; left: 0; bottom: 0; width: min(var(--panel-w), 88vw);
+        background: var(--panel); border-right: 1px solid var(--border);
+        display: flex; flex-direction: column; z-index: 300; overflow: hidden;
+        transform: translateX(-110%);
+        transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+      }
+      #panel.open { transform: translateX(0); }
+      #fab {
+        position: fixed; bottom: 24px; left: 16px; z-index: 200;
+        width: 52px; height: 52px; border-radius: 50%;
+        background: var(--amber); border: none; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.45);
+        transition: transform 0.15s;
+        color: var(--bg);
+      }
+      #fab:active { transform: scale(0.91); }
+      #fab svg { width: 22px; height: 22px; }
+      #panel-backdrop {
+        position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+        z-index: 299; opacity: 0; pointer-events: none;
+        transition: opacity 0.28s;
+      }
+      #panel-backdrop.show { opacity: 1; pointer-events: all; }
+    }
+
+    /* ── PANEL INTERNALS ── */
+    #panel-header {
+      padding: 18px 16px 12px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: flex-start; justify-content: space-between; flex-shrink: 0;
+    }
+    #panel-header h1 { font-family: 'Fraunces', serif; font-weight: 600; font-size: 20px; color: var(--amber); letter-spacing: -0.5px; }
+    #panel-header p  { font-size: 9px; color: var(--text-dim); margin-top: 3px; letter-spacing: 0.07em; text-transform: uppercase; }
+    #panel-close { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 22px; line-height: 1; padding: 0 2px; }
+
+    #stats {
+      padding: 12px 14px; border-bottom: 1px solid var(--border);
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex-shrink: 0;
+    }
+    .stat { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 9px 10px 7px; }
+    .stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-dim); margin-bottom: 3px; }
+    .stat-value { font-size: 15px; font-weight: 500; color: var(--text); }
+    .stat-value span { font-size: 10px; color: var(--text-dim); }
+
+    #toolbar { padding: 10px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .toolbar-row { display: flex; gap: 5px; }
+
+    .btn {
+      flex: 1; padding: 7px 4px; border: 1px solid var(--border); background: var(--bg);
+      color: var(--text); font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.04em; text-transform: uppercase; border-radius: 5px; cursor: pointer;
+      transition: background 0.13s, border-color 0.13s, color 0.13s;
+      display: flex; align-items: center; justify-content: center; gap: 4px;
+    }
+    .btn:hover:not(:disabled) { background: #2a2a28; border-color: var(--amber-dim); color: var(--amber); }
+    .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn.danger:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
+    .btn svg { width: 11px; height: 11px; flex-shrink: 0; }
+
+    #export-section { padding: 10px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .section-title  { font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-dim); margin-bottom: 7px; }
+
+    #elevation-section { padding: 10px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    #elevation-title   { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
+    #elevation-canvas  { width: 100%; height: 72px; display: block; border-radius: 4px; background: var(--bg); }
+    .elev-empty {
+      height: 72px; display: flex; align-items: center; justify-content: center;
+      font-size: 10px; color: var(--text-dim); background: var(--bg);
+      border-radius: 4px; border: 1px dashed var(--border); letter-spacing: 0.05em;
+    }
+    .straight-badge {
+      font-size: 9px; color: #f59e0b; letter-spacing: 0.05em;
+      padding: 2px 6px; border-radius: 10px;
+      background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3);
+    }
+
+    #waypoints-section { flex: 1; overflow-y: auto; padding: 10px 14px; min-height: 0; }
+    #waypoints-section::-webkit-scrollbar { width: 3px; }
+    #waypoints-section::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .waypoint-item {
+      display: flex; align-items: center; gap: 7px; padding: 6px 8px;
+      border: 1px solid var(--border); border-radius: 5px; margin-bottom: 5px;
+      font-size: 10px; color: var(--text-dim); background: var(--bg);
+      transition: border-color 0.13s;
+    }
+    .waypoint-item:hover { border-color: var(--amber-dim); }
+    .wp-num {
+      width: 17px; height: 17px; border-radius: 50%; background: var(--amber); color: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 500; flex-shrink: 0;
+    }
+    .wp-num.first { background: var(--green); }
+    .wp-num.last  { background: var(--red); }
+    .wp-coords { flex: 1; }
+    .wp-remove { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px; transition: color 0.13s; }
+    .wp-remove:hover { color: var(--red); }
+
+    /* ── MAP OVERLAY BUTTONS ── */
+    .map-btn {
+      position: absolute; z-index: 10; padding: 7px 11px;
+      background: rgba(34,34,32,0.9); border: 1px solid var(--border);
+      color: var(--text); font-family: 'DM Mono', monospace; font-size: 10px;
+      text-transform: uppercase; letter-spacing: 0.05em; border-radius: 5px; cursor: pointer;
+      transition: background 0.13s, border-color 0.13s, color 0.13s;
+      display: flex; align-items: center; gap: 6px; backdrop-filter: blur(6px);
+    }
+    .map-btn:hover { border-color: var(--amber-dim); color: var(--amber); }
+    .map-btn.active { background: var(--amber); color: var(--bg); border-color: var(--amber); }
+    .map-btn svg { width: 12px; height: 12px; }
+    #btn-satellite { top: 12px; right: 12px; }
+    #btn-locate    { top: 50px; right: 12px; }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed; bottom: 88px; left: 50%;
+      transform: translateX(-50%) translateY(30px);
+      background: var(--panel); border: 1px solid var(--border);
+      color: var(--text); padding: 7px 16px; border-radius: 20px;
+      font-size: 11px; letter-spacing: 0.04em; white-space: nowrap;
+      transition: transform 0.25s, opacity 0.25s; opacity: 0; z-index: 500;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    @media (min-width: 600px) { #toast { bottom: 20px; } }
+
+    .maplibregl-ctrl-bottom-right { right: 0; }
+    .maplibregl-ctrl-bottom-left  { left: 0; }
+  </style>
+</head>
+<body>
+
+<button id="fab" aria-label="Open trail panel">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+    <path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7M9 20l6-3M9 20V7m6 13l5.447-2.724A1 1 0 0021 16.382V5.618a1 1 0 00-1.447-.894L15 7m0 13V7M9 7l6-3"/>
+  </svg>
+</button>
+<div id="panel-backdrop"></div>
+
+<div id="panel">
+  <div id="panel-header">
+    <div>
+      <h1>Trail Planner</h1>
+      <p>Tap map to add waypoints</p>
+    </div>
+    <button id="panel-close" aria-label="Close panel">×</button>
+  </div>
+
+  <div id="stats">
+    <div class="stat"><div class="stat-label">Distance</div><div class="stat-value" id="stat-dist">—</div></div>
+    <div class="stat"><div class="stat-label">Est. Time</div><div class="stat-value" id="stat-time">—</div></div>
+    <div class="stat"><div class="stat-label">↑ Ascent</div><div class="stat-value" id="stat-asc">—</div></div>
+    <div class="stat"><div class="stat-label">↓ Descent</div><div class="stat-value" id="stat-desc">—</div></div>
+  </div>
+
+  <div id="toolbar">
+    <div class="toolbar-row">
+      <button class="btn" id="btn-undo" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 00-4-4H4"/></svg>Undo
+      </button>
+      <button class="btn" id="btn-redo" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 014-4h12"/></svg>Redo
+      </button>
+      <button class="btn danger" id="btn-clear" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>Clear
+      </button>
+    </div>
+  </div>
+
+  <div id="export-section">
+    <div class="section-title">Export</div>
+    <div class="toolbar-row">
+      <button class="btn" id="btn-gpx" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>GPX
+      </button>
+      <button class="btn" id="btn-geojson" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>GeoJSON
+      </button>
+    </div>
+  </div>
+
+  <div id="elevation-section">
+    <div id="elevation-title">
+      <span class="section-title" style="margin-bottom:0;">Elevation Profile</span>
+      <span id="straight-badge" class="straight-badge" style="display:none;">⚠ straight-line</span>
+    </div>
+    <div id="elevation-container">
+      <div class="elev-empty" id="elev-empty">Add 2+ points to see profile</div>
+      <canvas id="elevation-canvas" style="display:none;"></canvas>
+    </div>
+  </div>
+
+  <div id="waypoints-section">
+    <div class="section-title">Waypoints</div>
+    <div id="waypoints-list"></div>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<button class="map-btn" id="btn-satellite">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+  Satellite
+</button>
+<button class="map-btn" id="btn-locate">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg>
+  Locate
+</button>
+
+<div id="toast"></div>
+<script>
+const ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjY3ZTM0ODI5YjQ2NDFmYTEyODZiYmY0MDNjMWM2YWI2NjNhNGUwMWRlZTUwNTVmMTAyNGQwMTYwIiwiaCI6Im11cm11cjY0In0=";
+const HIKING_KMH = 4;
+
+let points = [];
+let undoStack = [[]];
+let redoStack = [];
+let currentRoute = null;
+let usedFallback = false;
+let isSatellite = false;
+
+/* ---------------- MAP STYLES ---------------- */
+
+const osmStyle = {
+  version: 8,
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors'
+    }
+  },
+  layers: [{ id: 'osm-tiles', type: 'raster', source: 'osm' }]
+};
+
+const satStyle = {
+  version: 8,
+  sources: {
+    sat: {
+      type: 'raster',
+      tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+      tileSize: 256,
+      attribution: '© Esri'
+    }
+  },
+  layers: [{ id: 'sat-tiles', type: 'raster', source: 'sat' }]
+};
+
+const map = new maplibregl.Map({
+  container: 'map',
+  style: osmStyle,
+  center: [8.5417, 47.3769],
+  zoom: 13
+});
+
+map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+map.addControl(new maplibregl.ScaleControl(), 'bottom-left');
+
+map.on('load', () => {
+  map.addSource('route', { type: 'geojson', data: emptyFeature() });
+
+  map.addLayer({
+    id: 'route-line',
+    type: 'line',
+    source: 'route',
+    paint: { 'line-width': 4, 'line-color': '#d4a843' }
+  });
+
+  map.addSource('markers', {
+    type: 'geojson',
+    data: emptyFeatureCollection()
+  });
+
+  map.addLayer({
+    id: 'marker-points',
+    type: 'circle',
+    source: 'markers',
+    paint: {
+      'circle-radius': 7,
+      'circle-color': [
+        'case',
+        ['==', ['get', 'role'], 'start'], '#4ade80',
+        ['==', ['get', 'role'], 'end'], '#e11d48',
+        '#d4a843'
+      ],
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#1a1a18'
+    }
+  });
+});
+
+/* ---------------- CLICK HANDLER ---------------- */
+
+map.on('click', async e => {
+  const newPts = [...points, { lat: e.lngLat.lat, lng: e.lngLat.lng }];
+  applyPoints(newPts, true);
+  if (newPts.length >= 2) await doRoute(newPts);
+});
+
+/* ---------------- ROUTING ---------------- */
+
+async function doRoute(pts) {
+  try {
+    const res = await fetch(
+      "https://api.openrouteservice.org/v2/directions/foot-hiking/geojson",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${ORS_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          coordinates: pts.map(p => [p.lng, p.lat]),
+          elevation: true
+        })
+      }
+    );
+
+    if (!res.ok) {
+      console.error(await res.json());
+      fallbackRoute(pts);
+      return;
+    }
+
+    const geo = await res.json();
+    const feature = geo.features[0];
+    const summary = feature.properties.summary;
+
+    currentRoute = feature.geometry;
+    usedFallback = false;
+
+    paintRoute();
+    updateStats({
+      distance: summary.distance,
+      time: summary.duration * 1000,
+      ascend: summary.ascent,
+      descend: summary.descent
+    });
+
+    drawElevation(feature.geometry.coordinates);
+
+  } catch (err) {
+    console.error(err);
+    fallbackRoute(pts);
+  }
+
+  updateButtons();
+}
+
+function fallbackRoute(pts) {
+  usedFallback = true;
+  currentRoute = {
+    type: "LineString",
+    coordinates: pts.map(p => [p.lng, p.lat])
+  };
+
+  paintRoute();
+  updateStats(computeStraightStats(pts));
+  drawElevation(null);
+  showToast("No trail data — showing straight line");
+}
+
+/* ---------------- MARKERS ---------------- */
+
+function updateMarkers() {
+  if (!map.getSource('markers')) return;
+
+  map.getSource('markers').setData({
+    type: 'FeatureCollection',
+    features: points.map((p, i) => ({
+      type: 'Feature',
+      properties: {
+        role:
+          i === 0 ? 'start'
+          : i === points.length - 1 ? 'end'
+          : 'mid'
+      },
+      geometry: {
+        type: 'Point',
+        coordinates: [p.lng, p.lat]
+      }
+    }))
+  });
+}
+
+/* ---------------- STATE ---------------- */
+
+function applyPoints(newPts, save = false) {
+  if (save) {
+    undoStack.push(JSON.parse(JSON.stringify(points)));
+    redoStack = [];
+  }
+  points = newPts;
+  updateMarkers();
+  updateWaypointList();
+  updateButtons();
+}
+
+/* ---------------- WAYPOINT LIST ---------------- */
+
+function updateWaypointList() {
+  const list = document.getElementById('waypoints-list');
+  if (!list) return;
+
+  list.innerHTML = '';
+
+  if (!points.length) {
+    list.innerHTML =
+      '<div style="font-size:10px;color:var(--text-dim);">No waypoints yet.</div>';
+    return;
+  }
+
+  points.forEach((p, i) => {
+    const div = document.createElement('div');
+    div.className = 'waypoint-item';
+    div.innerHTML =
+      `<div class="wp-num">${i + 1}</div>
+       <div class="wp-coords">${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}</div>`;
+    list.appendChild(div);
+  });
+}
+
+/* ---------------- HELPERS ---------------- */
+
+function computeStraightStats(pts) {
+  let km = 0;
+  for (let i = 1; i < pts.length; i++)
+    km += haversine(pts[i - 1], pts[i]);
+
+  return {
+    distance: km * 1000,
+    time: (km / HIKING_KMH) * 3600000,
+    ascend: null,
+    descend: null
+  };
+}
+
+function haversine(a, b) {
+  const R = 6371;
+  const toRad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * toRad;
+  const dLng = (b.lng - a.lng) * toRad;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * toRad) *
+      Math.cos(b.lat * toRad) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+}
+
+function paintRoute() {
+  map.getSource('route').setData({
+    type: 'Feature',
+    geometry: currentRoute
+  });
+}
+
+function emptyFeature() {
+  return { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } };
+}
+
+function emptyFeatureCollection() {
+  return { type: 'FeatureCollection', features: [] };
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function updateButtons() {}
+
+</script>
+  
+
+  
+</body>
+</html>
