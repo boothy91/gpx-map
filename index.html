@@ -200,6 +200,36 @@
     #waypoints-section::-webkit-scrollbar { width: 3px; }
     #waypoints-section::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
+    #routes-section { padding: 0 12px 12px; }
+    #routes-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+    .route-card {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 12px; cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .route-card:hover { border-color: var(--blue); }
+    .route-card.active { border-color: var(--blue); background: rgba(79,195,247,0.08); }
+    .route-card-icon {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: rgba(79,195,247,0.15); display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .route-card-icon svg { width: 16px; height: 16px; stroke: var(--blue); }
+    .route-card-info { flex: 1; min-width: 0; }
+    .route-card-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .route-card-meta { font-size: 11px; color: var(--text-sec); margin-top: 2px; }
+    .route-card-delete {
+      width: 24px; height: 24px; border-radius: 50%; border: none;
+      background: rgba(204,34,34,0.15); color: var(--red);
+      font-size: 14px; font-weight: 700; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .route-card-delete:hover { background: rgba(204,34,34,0.35); }
+    .routes-empty { font-size: 11px; color: var(--text-sec); padding: 4px 0; }
+
+
     .waypoint-item {
       display: flex; align-items: center; gap: 8px; padding: 7px 9px;
       border: 1px solid var(--border); border-radius: 8px; margin-bottom: 5px;
@@ -258,6 +288,24 @@
       font-size: 12px; font-weight: 600; color: var(--blue);
       text-align: center; cursor: pointer;
       transition: all 0.13s; white-space: nowrap;
+
+    #map-routes-list {
+      display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow-y: auto;
+    }
+    .map-route-card {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 10px;
+      background: rgba(13,13,26,0.92); border: 1px solid var(--border);
+      border-radius: 8px; backdrop-filter: blur(8px);
+      cursor: pointer; transition: border-color 0.15s;
+      font-size: 11px; color: var(--text); max-width: 140px;
+    }
+    .map-route-card:hover { border-color: var(--blue-dim); }
+    .map-route-card.active { border-color: var(--blue); }
+    .map-route-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .map-route-card-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .map-route-card-x { color: var(--red); font-weight: 700; font-size: 13px; flex-shrink: 0; padding: 0 2px; }
+
     }
     #map-dist-display:hover { border-color: var(--blue-dim); }
 
@@ -387,7 +435,11 @@
       <button class="btn" id="btn-import">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="17"/></svg>Import GPX
       </button>
+      <button class="btn" id="btn-upload-gpx">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="17"/></svg>Load GPX
+      </button>
       <input type="file" id="gpx-file-input" accept=".gpx" style="display:none" />
+      <input type="file" id="gpx-upload-input" accept=".gpx" multiple style="display:none" />
     </div>
     <div class="toolbar-row">
       <button class="btn" id="btn-gpx" disabled>
@@ -415,6 +467,12 @@
   <div id="waypoints-section">
     <div class="section-title">Waypoints</div>
     <div id="waypoints-list"></div>
+  </div>
+
+  <!-- Loaded Routes -->
+  <div id="routes-section">
+    <div class="section-title">Loaded Routes</div>
+    <div id="routes-list"></div>
   </div>
 </div>
 
@@ -460,12 +518,18 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
     GPX
   </button>
+  <button class="map-btn" id="map-btn-load-gpx">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="17"/></svg>
+    Load
+  </button>
 
   <div class="toolbar-divider"></div>
 
   <div id="map-dist-display" id="map-dist-wrap">
     <span id="map-dist-val">—</span>
   </div>
+
+  <div id="map-routes-list"></div>
 </div>
 
 <div id="toast"></div>
@@ -511,6 +575,7 @@ map.on('load', () => {
       'circle-stroke-width': 2, 'circle-stroke-color': '#0D0D1A'
     }
   });
+  renderRoutesList();
 });
 
 /* ── CLICK HANDLER ── */
@@ -873,6 +938,151 @@ function clearRoute() {
   if (empty) empty.style.display = 'flex';
   if (canvas) canvas.style.display = 'none';
 }
+
+/* ── LOADED ROUTES ── */
+let loadedRoutes = []; // [{name, coords, color, layerId, sourceId}]
+let activeRouteIdx = -1;
+const ROUTE_COLORS = ['#4FC3F7','#4CAF50','#F97316','#9333EA','#EF4444','#FFDD00','#FF69B4','#00CED1'];
+
+function parseGpxCoords(text) {
+  const parser = new DOMParser();
+  const xml = parser.parseFromString(text, 'application/xml');
+  if (xml.querySelector('parsererror')) return null;
+  const coords = [];
+  xml.querySelectorAll('trkpt, rtept').forEach(pt => {
+    const lat = parseFloat(pt.getAttribute('lat')), lng = parseFloat(pt.getAttribute('lon'));
+    const ele = pt.querySelector('ele');
+    if (!isNaN(lat) && !isNaN(lng)) coords.push(ele ? [lng, lat, parseFloat(ele.textContent)] : [lng, lat]);
+  });
+  return coords.length >= 2 ? coords : null;
+}
+
+function getRouteName(xml, filename) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, 'application/xml');
+  const nameEl = doc.querySelector('trk > name, rte > name, gpx > name');
+  if (nameEl && nameEl.textContent.trim()) return nameEl.textContent.trim();
+  return filename.replace(/\.gpx$/i, '');
+}
+
+function addLoadedRoute(name, coords) {
+  const idx = loadedRoutes.length;
+  const color = ROUTE_COLORS[idx % ROUTE_COLORS.length];
+  const sourceId = `loaded-route-${idx}`;
+  const layerId  = `loaded-route-line-${idx}`;
+  map.addSource(sourceId, { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coords } } });
+  map.addLayer({ id: layerId, type: 'line', source: sourceId, paint: { 'line-width': 3, 'line-color': color, 'line-opacity': 0.85 } });
+  // Compute distance
+  let km = 0;
+  for (let i = 1; i < coords.length; i++) {
+    const a = { lat: coords[i-1][1], lng: coords[i-1][0] };
+    const b = { lat: coords[i][1],   lng: coords[i][0] };
+    km += haversine(a, b);
+  }
+  loadedRoutes.push({ name, coords, color, sourceId, layerId, km });
+  renderRoutesList();
+  fitAllRoutes();
+}
+
+function removeLoadedRoute(idx) {
+  const r = loadedRoutes[idx];
+  if (map.getLayer(r.layerId))  map.removeLayer(r.layerId);
+  if (map.getSource(r.sourceId)) map.removeSource(r.sourceId);
+  loadedRoutes.splice(idx, 1);
+  // Re-index remaining layers
+  if (activeRouteIdx === idx) activeRouteIdx = -1;
+  else if (activeRouteIdx > idx) activeRouteIdx--;
+  renderRoutesList();
+}
+
+function showRoute(idx) {
+  activeRouteIdx = idx;
+  const r = loadedRoutes[idx];
+  const lngs = r.coords.map(c => c[0]), lats = r.coords.map(c => c[1]);
+  map.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: 40, duration: 800 });
+  drawElevation(r.coords[0].length === 3 ? r.coords : null);
+  renderRoutesList();
+}
+
+function fitAllRoutes() {
+  if (!loadedRoutes.length) return;
+  const allCoords = loadedRoutes.flatMap(r => r.coords);
+  const lngs = allCoords.map(c => c[0]), lats = allCoords.map(c => c[1]);
+  map.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: 40, duration: 800 });
+}
+
+function renderRoutesList() {
+  const list = document.getElementById('routes-list');
+  const mapList = document.getElementById('map-routes-list');
+
+  // Panel list
+  if (list) {
+    list.innerHTML = '';
+    if (!loadedRoutes.length) {
+      list.innerHTML = '<div class="routes-empty">No routes loaded yet.</div>';
+    } else {
+      loadedRoutes.forEach((r, idx) => {
+        const distStr = useMetric ? `${r.km.toFixed(2)} km` : `${(r.km / 1.60934).toFixed(2)} mi`;
+        const card = document.createElement('div');
+        card.className = 'route-card' + (activeRouteIdx === idx ? ' active' : '');
+        card.innerHTML = `
+          <div class="route-card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18" style="stroke:${r.color}"/></svg>
+          </div>
+          <div class="route-card-info">
+            <div class="route-card-name">${r.name}</div>
+            <div class="route-card-meta">${distStr} · ${r.coords.length} pts</div>
+          </div>
+          <button class="route-card-delete" title="Remove">×</button>
+        `;
+        card.querySelector('.route-card-delete').addEventListener('click', e => { e.stopPropagation(); removeLoadedRoute(idx); });
+        card.addEventListener('click', () => showRoute(idx));
+        list.appendChild(card);
+      });
+    }
+  }
+
+  // Right toolbar list
+  if (mapList) {
+    mapList.innerHTML = '';
+    loadedRoutes.forEach((r, idx) => {
+      const card = document.createElement('div');
+      card.className = 'map-route-card' + (activeRouteIdx === idx ? ' active' : '');
+      card.innerHTML = `
+        <div class="map-route-dot" style="background:${r.color}"></div>
+        <div class="map-route-card-name">${r.name}</div>
+        <span class="map-route-card-x" title="Remove">×</span>
+      `;
+      card.querySelector('.map-route-card-x').addEventListener('click', e => { e.stopPropagation(); removeLoadedRoute(idx); });
+      card.addEventListener('click', () => showRoute(idx));
+      mapList.appendChild(card);
+    });
+  }
+}
+
+// Upload multiple GPX files
+document.getElementById('btn-upload-gpx').addEventListener('click', () => document.getElementById('gpx-upload-input').click());
+document.getElementById('map-btn-load-gpx').addEventListener('click', () => document.getElementById('gpx-upload-input').click());
+document.getElementById('gpx-upload-input').addEventListener('change', function () {
+  const files = Array.from(this.files);
+  if (!files.length) return;
+  let loaded = 0;
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const coords = parseGpxCoords(e.target.result);
+        if (!coords) { showToast(`No track points in ${file.name}`); return; }
+        const name = getRouteName(e.target.result, file.name);
+        addLoadedRoute(name, coords);
+        loaded++;
+        if (loaded === files.length) showToast(`Loaded ${loaded} route${loaded > 1 ? 's' : ''}`);
+      } catch { showToast(`Failed to load ${file.name}`); }
+    };
+    reader.readAsText(file);
+  });
+  this.value = '';
+});
 
 function download(filename, text, mime) {
   const a = document.createElement('a');
