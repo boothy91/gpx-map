@@ -6,542 +6,297 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
   <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg:       #0D0D1A;
-      --card:     #12122A;
-      --border:   #1E1E3A;
+      --bg:       #0D0F1E;
+      --card:     #131628;
+      --card2:    #1a1d35;
+      --border:   #1E2240;
       --blue:     #4FC3F7;
-      --blue-dim: #2A6A8A;
+      --blue-dim: #1a4a6a;
       --red:      #CC2222;
       --text:     #FFFFFF;
-      --text-sec: #8888AA;
+      --text-sec: #7788AA;
       --green:    #4CAF50;
-      --panel-w:  300px;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); height: 100%; overflow: hidden; }
 
-    body {
-      font-family: 'Inter', -apple-system, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      overflow: hidden;
-      height: 100dvh;
+    /* ── LAYOUT ── */
+    #app { display: flex; flex-direction: column; height: 100dvh; position: relative; }
+
+    /* ── TOP BAR ── */
+    #top-bar {
+      position: relative; z-index: 20;
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      padding: 6px 8px;
+      display: flex; align-items: center; gap: 5px; flex-shrink: 0; flex-wrap: wrap;
     }
+    .top-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 7px 10px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+      color: var(--blue); font-family: inherit; font-size: 10px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      cursor: pointer; transition: all 0.13s; white-space: nowrap; flex-shrink: 0;
+    }
+    .top-btn svg { width: 12px; height: 12px; stroke: var(--blue); flex-shrink: 0; }
+    .top-btn:hover:not(:disabled) { border-color: var(--blue); background: rgba(79,195,247,0.08); }
+    .top-btn.active { border-color: var(--blue); border-width: 2px; background: rgba(79,195,247,0.1); box-shadow: 0 0 10px rgba(79,195,247,0.3); }
+    .top-btn:disabled { opacity: 0.28; cursor: not-allowed; }
+    .top-btn.danger { color: var(--red); }
+    .top-btn.danger svg { stroke: var(--red); }
+    .top-btn.danger:hover:not(:disabled) { border-color: var(--red); background: rgba(204,34,34,0.08); }
+
+    #top-dist {
+      margin-left: auto; padding: 7px 10px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+      font-size: 11px; font-weight: 700; color: var(--blue);
+      cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    }
+    #top-dist:hover { border-color: var(--blue); }
 
     /* ── MAP ── */
-    #map { position: fixed; inset: 0; }
+    #map-wrap { flex: 1; position: relative; min-height: 0; }
+    #map { position: absolute; inset: 0; }
 
-    /* ── DESKTOP ── */
-    @media (min-width: 600px) {
-      #map { left: 0; transition: left 0.28s cubic-bezier(0.4,0,0.2,1); }
-      #map.panel-open { left: var(--panel-w); }
-      #panel {
-        position: fixed; top: 0; left: 0; bottom: 0; width: var(--panel-w);
-        background: var(--bg); border-right: 1px solid var(--border);
-        display: flex; flex-direction: column; z-index: 100; overflow: hidden;
-        transform: translateX(-110%);
-        transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 4px 0 24px rgba(0,0,0,0.5);
-      }
-      #panel.open { transform: translateX(0); }
-      #fab { display: none !important; }
-      #panel-backdrop { display: none !important; }
-      #panel-close { display: none !important; }
+    /* ── BOTTOM DRAWER ── */
+    #drawer {
+      position: relative; z-index: 20;
+      background: var(--bg); border-top: 1px solid var(--border);
+      flex-shrink: 0; overflow: hidden;
+      transition: max-height 0.32s cubic-bezier(0.4,0,0.2,1);
+      max-height: 50px;
     }
+    #drawer.open { max-height: 62vh; overflow-y: auto; }
+    #drawer::-webkit-scrollbar { width: 3px; }
+    #drawer::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-    /* ── MOBILE ── */
-    @media (max-width: 599px) {
-      #panel {
-        position: fixed; top: 0; left: 0; bottom: 0; width: min(var(--panel-w), 88vw);
-        background: var(--bg); border-right: 1px solid var(--border);
-        display: flex; flex-direction: column; z-index: 300; overflow: hidden;
-        transform: translateX(-110%);
-        transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 4px 0 32px rgba(0,0,0,0.7);
-      }
-      #panel.open { transform: translateX(0); }
-      #fab { display: none !important; }
-      #panel-backdrop {
-        position: fixed; inset: 0; background: rgba(0,0,0,0.6);
-        z-index: 299; opacity: 0; pointer-events: none;
-        transition: opacity 0.28s;
-      }
-      #panel-backdrop.show { opacity: 1; pointer-events: all; }
-    }
-
-    /* ── PANEL HEADER ── */
-    #panel-header {
-      padding: 16px 14px 12px;
-      border-bottom: 1px solid var(--border);
+    #drawer-handle {
       display: flex; align-items: center; justify-content: space-between;
-      flex-shrink: 0;
+      padding: 10px 12px; cursor: pointer; user-select: none;
+      position: sticky; top: 0; background: var(--bg);
+      border-bottom: 1px solid transparent; z-index: 1; flex-shrink: 0;
     }
-    #panel-header h1 {
-      font-size: 16px; font-weight: 600; color: var(--blue);
-      letter-spacing: 0.03em;
-    }
-    #panel-header p {
-      font-size: 10px; color: var(--text-sec); margin-top: 2px;
-    }
-    #panel-close {
-      background: none; border: none; color: var(--text-sec);
-      cursor: pointer; font-size: 20px; line-height: 1; padding: 2px 4px;
-    }
+    #drawer.open #drawer-handle { border-bottom-color: var(--border); }
+    #drawer-handle-left { display: flex; align-items: center; gap: 10px; }
+    #drawer-handle-left span { font-size: 10px; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: 0.1em; }
+    #drawer-stats-mini { display: flex; gap: 12px; font-size: 10px; color: var(--text-sec); }
+    #drawer-stats-mini b { color: var(--text); font-weight: 600; }
+    #drawer-chevron { width: 16px; height: 16px; stroke: var(--text-sec); transition: transform 0.3s; flex-shrink: 0; }
+    #drawer.open #drawer-chevron { transform: rotate(180deg); }
 
-    /* ── STATS GRID ── */
-    #stats {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border);
-      display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
-      flex-shrink: 0;
-    }
-    .stat {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px 10px 8px;
-    }
-    .stat-label {
-      font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em;
-      color: var(--text-sec); margin-bottom: 4px;
-    }
-    .stat-value {
-      font-size: 15px; font-weight: 600; color: var(--text);
-    }
-    .stat-value span { font-size: 10px; color: var(--text-sec); margin-left: 1px; }
+    #drawer-content { padding: 10px 12px 20px; }
 
-    /* ── UNIT TOGGLE ── */
-    #unit-toggle-row {
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--border);
-      display: flex; gap: 6px; flex-shrink: 0;
-    }
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 5px; margin-bottom: 10px; }
+    .stat { background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 7px 6px; }
+    .stat-label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-sec); margin-bottom: 3px; }
+    .stat-value { font-size: 13px; font-weight: 700; color: var(--text); }
+    .stat-value span { font-size: 9px; color: var(--text-sec); margin-left: 1px; }
+
+    .sec-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-sec); margin-bottom: 6px; margin-top: 10px; display: flex; align-items: center; }
+    .row { display: flex; gap: 5px; margin-bottom: 6px; }
+
     .unit-btn {
       flex: 1; padding: 6px 0;
-      border: 1px solid var(--border);
-      background: var(--card);
-      color: var(--text-sec);
-      font-family: inherit; font-size: 11px; font-weight: 500;
-      border-radius: 8px; cursor: pointer;
-      transition: all 0.15s;
-      letter-spacing: 0.05em;
+      border: 1px solid var(--border); background: var(--card2);
+      color: var(--text-sec); font-family: inherit; font-size: 10px; font-weight: 600;
+      border-radius: 7px; cursor: pointer; transition: all 0.13s; letter-spacing: 0.05em;
     }
-    .unit-btn.active {
-      background: var(--blue);
-      border-color: var(--blue);
-      color: var(--bg);
-      font-weight: 600;
-    }
+    .unit-btn.active { background: var(--blue); border-color: var(--blue); color: var(--bg); }
 
-    /* ── TOOLBAR ── */
-    #toolbar {
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
+    #profile-select {
+      flex: 1; padding: 7px 10px;
+      background: var(--card2); border: 1px solid var(--border); border-radius: 7px;
+      color: var(--text); font-family: inherit; font-size: 10px; font-weight: 500;
+      cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238888AA' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 8px center; padding-right: 24px;
     }
-    .toolbar-row { display: flex; gap: 5px; }
+    #profile-select:focus { outline: none; border-color: var(--blue-dim); }
+    #profile-select option { background: #131628; }
 
-    .btn {
-      flex: 1; padding: 8px 4px;
-      border: 1px solid var(--border);
-      background: var(--card);
-      color: var(--text);
-      font-family: inherit; font-size: 10px; font-weight: 500;
-      letter-spacing: 0.04em; text-transform: uppercase;
-      border-radius: 8px; cursor: pointer;
-      transition: all 0.13s;
-      display: flex; align-items: center; justify-content: center; gap: 4px;
-    }
-    .btn:hover:not(:disabled) { border-color: var(--blue-dim); color: var(--blue); }
-    .btn:disabled { opacity: 0.3; cursor: not-allowed; }
-    .btn.danger:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
-    .btn svg { width: 11px; height: 11px; flex-shrink: 0; }
-
-    /* ── EXPORT ── */
-    #export-section {
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-    .section-title {
-      font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em;
-      color: var(--text-sec); margin-bottom: 6px;
-    }
-
-    /* ── ELEVATION ── */
-    #elevation-section {
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-    #elevation-title { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-    #elevation-canvas {
-      width: 100%; height: 72px; display: block;
-      border-radius: 6px; background: var(--card);
-    }
+    #elevation-canvas { width: 100%; height: 64px; display: block; border-radius: 6px; background: var(--card2); }
     .elev-empty {
-      height: 72px; display: flex; align-items: center; justify-content: center;
-      font-size: 10px; color: var(--text-sec);
-      background: var(--card); border-radius: 6px;
-      border: 1px dashed var(--border); letter-spacing: 0.05em;
+      height: 64px; display: flex; align-items: center; justify-content: center;
+      font-size: 10px; color: var(--text-sec); background: var(--card2);
+      border-radius: 6px; border: 1px dashed var(--border); letter-spacing: 0.04em;
     }
     .straight-badge {
-      font-size: 9px; color: var(--blue); letter-spacing: 0.05em;
-      padding: 2px 6px; border-radius: 10px;
-      background: rgba(79,195,247,0.1); border: 1px solid rgba(79,195,247,0.3);
+      font-size: 9px; color: var(--blue); padding: 2px 6px; border-radius: 10px;
+      background: rgba(79,195,247,0.1); border: 1px solid rgba(79,195,247,0.3); margin-left: 6px;
     }
-
-    /* ── WAYPOINTS ── */
-    #waypoints-section {
-      flex: 1; overflow-y: auto; padding: 8px 12px; min-height: 0;
-    }
-    #waypoints-section::-webkit-scrollbar { width: 3px; }
-    #waypoints-section::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-    #routes-section { padding: 0 12px 12px; }
-    #routes-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
-    .route-card {
-      display: flex; align-items: center; gap: 8px;
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 8px; padding: 10px 12px; cursor: pointer;
-      transition: border-color 0.15s;
-    }
-    .route-card:hover { border-color: var(--blue); }
-    .route-card.active { border-color: var(--blue); background: rgba(79,195,247,0.08); }
-    .route-card-icon {
-      width: 32px; height: 32px; border-radius: 50%;
-      background: rgba(79,195,247,0.15); display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-    .route-card-icon svg { width: 16px; height: 16px; stroke: var(--blue); }
-    .route-card-info { flex: 1; min-width: 0; }
-    .route-card-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .route-card-meta { font-size: 11px; color: var(--text-sec); margin-top: 2px; }
-    .route-card-delete {
-      width: 24px; height: 24px; border-radius: 50%; border: none;
-      background: rgba(204,34,34,0.15); color: var(--red);
-      font-size: 14px; font-weight: 700; cursor: pointer;
-      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-      transition: background 0.15s;
-    }
-    .route-card-delete:hover { background: rgba(204,34,34,0.35); }
-    .routes-empty { font-size: 11px; color: var(--text-sec); padding: 4px 0; }
-
 
     .waypoint-item {
-      display: flex; align-items: center; gap: 8px; padding: 7px 9px;
-      border: 1px solid var(--border); border-radius: 8px; margin-bottom: 5px;
-      font-size: 10px; color: var(--text-sec); background: var(--card);
-      transition: border-color 0.13s;
+      display: flex; align-items: center; gap: 7px; padding: 6px 8px;
+      border: 1px solid var(--border); border-radius: 7px; margin-bottom: 4px;
+      font-size: 10px; color: var(--text-sec); background: var(--card2);
     }
-    .waypoint-item:hover { border-color: var(--blue-dim); }
     .wp-num {
-      width: 18px; height: 18px; border-radius: 50%;
+      width: 17px; height: 17px; border-radius: 50%;
       background: var(--blue); color: var(--bg);
       display: flex; align-items: center; justify-content: center;
-      font-size: 9px; font-weight: 600; flex-shrink: 0;
+      font-size: 8px; font-weight: 700; flex-shrink: 0;
     }
     .wp-num.first { background: var(--green); }
     .wp-num.last  { background: var(--red); }
-    .wp-coords { flex: 1; }
-    .wp-remove {
-      background: none; border: none; color: var(--text-sec);
-      cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px;
-      transition: color 0.13s;
-    }
-    .wp-remove:hover { color: var(--red); }
 
-    /* ── RIGHT TOOLBAR ── */
-    #right-toolbar {
-      position: fixed; top: 12px; right: 12px;
-      display: flex; flex-direction: column; gap: 6px;
-      z-index: 10;
+    .route-card {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--card2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 10px; cursor: pointer;
+      transition: border-color 0.15s; margin-bottom: 4px;
     }
-
-    .map-btn {
-      padding: 8px 12px;
-      background: rgba(10,15,35,0.93); border: 1px solid #1a2a4a;
-      color: var(--blue); font-family: inherit; font-size: 11px; font-weight: 600;
-      text-transform: uppercase; letter-spacing: 0.05em;
-      border-radius: 8px; cursor: pointer;
-      transition: all 0.13s;
-      display: flex; align-items: center; justify-content: center; gap: 6px;
-      backdrop-filter: blur(10px);
-      white-space: nowrap;
-      text-shadow: 0 0 8px rgba(79,195,247,0.4);
+    .route-card:hover { border-color: var(--blue); }
+    .route-card.active { border-color: var(--blue); background: rgba(79,195,247,0.06); }
+    .route-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .route-card-info { flex: 1; min-width: 0; }
+    .route-card-name { font-size: 11px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .route-card-meta { font-size: 9px; color: var(--text-sec); margin-top: 2px; }
+    .route-card-del {
+      width: 22px; height: 22px; border-radius: 50%; border: none;
+      background: rgba(204,34,34,0.15); color: var(--red);
+      font-size: 13px; font-weight: 700; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
-    .map-btn svg { stroke: var(--blue); }
-    .map-btn:hover:not(:disabled) { border-color: var(--blue); background: rgba(79,195,247,0.1); }
-    .map-btn.active { background: rgba(10,15,35,0.93); color: var(--blue); border-color: var(--blue); border-width: 2px; box-shadow: 0 0 12px rgba(79,195,247,0.5), inset 0 0 10px rgba(79,195,247,0.12); }
-    .map-btn.active svg { stroke: var(--blue); }
-    .map-btn.active span { color: var(--blue); }
-    .map-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-    .map-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
-
-    .toolbar-divider {
-      height: 1px; background: var(--border); margin: 2px 0;
-    }
-
-    /* dist display */
-    #map-dist-display {
-      padding: 7px 12px;
-      background: rgba(13,13,26,0.92); border: 1px solid var(--border);
-      border-radius: 8px; backdrop-filter: blur(8px);
-      font-size: 12px; font-weight: 600; color: var(--blue);
-      text-align: center; cursor: pointer;
-      transition: all 0.13s; white-space: nowrap;
-    }
-    #map-dist-display:hover { border-color: var(--blue-dim); }
-
-    #map-routes-list {
-      display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow-y: auto;
-    }
-    .map-route-card {
-      display: flex; align-items: center; gap: 6px;
-      padding: 6px 10px;
-      background: rgba(13,13,26,0.92); border: 1px solid var(--border);
-      border-radius: 8px; backdrop-filter: blur(8px);
-      cursor: pointer; transition: border-color 0.15s;
-      font-size: 11px; color: var(--text); max-width: 140px;
-    }
-    .map-route-card:hover { border-color: var(--blue-dim); }
-    .map-route-card.active { border-color: var(--blue); }
-    .map-route-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .map-route-card-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .map-route-card-x { color: var(--red); font-weight: 700; font-size: 13px; flex-shrink: 0; padding: 0 2px; }
-
-
-    /* ── PROFILE SELECT ── */
-    #profile-row {
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-    #profile-select {
-      width: 100%; padding: 8px 10px;
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 8px; color: var(--text);
-      font-family: inherit; font-size: 11px; font-weight: 500;
-      cursor: pointer; appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238888AA' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 10px center;
-      padding-right: 28px;
-    }
-    #profile-select:focus { outline: none; border-color: var(--blue-dim); }
-    #profile-select option { background: #12122A; }
+    .route-card-del:hover { background: rgba(204,34,34,0.3); }
+    .routes-empty { font-size: 10px; color: var(--text-sec); }
 
     /* ── TOAST ── */
     #toast {
-      position: fixed; bottom: 24px; left: 50%;
-      transform: translateX(-50%) translateY(20px);
-      background: var(--card); border: 1px solid var(--border);
-      color: var(--text); padding: 8px 18px; border-radius: 20px;
-      font-size: 11px; letter-spacing: 0.04em; white-space: nowrap;
-      transition: transform 0.25s, opacity 0.25s; opacity: 0; z-index: 500;
+      position: fixed; bottom: 70px; left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      background: var(--card2); border: 1px solid var(--border);
+      color: var(--text); padding: 7px 16px; border-radius: 20px;
+      font-size: 11px; letter-spacing: 0.03em; white-space: nowrap;
+      transition: transform 0.2s, opacity 0.2s; opacity: 0; z-index: 500;
+      pointer-events: none;
     }
     #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
-    /* hide bottom bar entirely */
-    #bottom-bar { display: none !important; }
-
-    .maplibregl-ctrl-bottom-right { right: 0; }
-    .maplibregl-ctrl-bottom-left  { left: 0; }
+    .maplibregl-ctrl-bottom-right { bottom: 0; }
+    .maplibregl-ctrl-bottom-left  { bottom: 0; }
   </style>
 </head>
 <body>
+<div id="app">
 
-<button id="fab" aria-label="Open trail panel"></button>
+  <!-- ── TOP BAR ── -->
+  <div id="top-bar">
+    <button class="top-btn" id="btn-satellite">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+      <span id="btn-satellite-label">Topo</span>
+    </button>
+    <button class="top-btn" id="btn-routing">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M12 5l7 7-7 7"/></svg>
+      <span id="btn-routing-label">Route On</span>
+    </button>
+    <button class="top-btn" id="btn-terrain">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20l5-10 4 6 3-4 6 8H3z"/></svg>
+      <span id="btn-terrain-label">3D</span>
+    </button>
+    <button class="top-btn" id="btn-locate">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg>
+      Locate
+    </button>
+    <button class="top-btn" id="btn-undo" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 00-4-4H4"/></svg>
+      Undo
+    </button>
+    <button class="top-btn" id="btn-redo" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 014-4h12"/></svg>
+      Redo
+    </button>
+    <button class="top-btn danger" id="btn-clear" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+      Clear
+    </button>
+    <div id="top-dist" title="Tap to toggle km/mi"><span id="top-dist-val">—</span></div>
+  </div>
 
-<!-- Bottom bar -->
-<div id="bottom-bar">
-  <button class="bar-btn" id="bar-menu" aria-label="Open menu">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-      <path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7M9 20l6-3M9 20V7m6 13l5.447-2.724A1 1 0 0021 16.382V5.618a1 1 0 00-1.447-.894L15 7m0 13V7M9 7l6-3"/>
-    </svg>
-    Menu
-  </button>
-  <button class="bar-btn" id="bar-dist" title="Distance">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-    <span id="bar-dist-val">—</span>
-  </button>
-  <button class="bar-btn" id="bar-undo" disabled aria-label="Undo">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 00-4-4H4"/></svg>
-    Undo
-  </button>
-  <button class="bar-btn" id="bar-redo" disabled aria-label="Redo">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 014-4h12"/></svg>
-    Redo
-  </button>
-  <button class="bar-btn" id="bar-gpx" disabled aria-label="Download GPX">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-    GPX
-  </button>
-</div>
+  <!-- ── MAP ── -->
+  <div id="map-wrap"><div id="map"></div></div>
 
-<div id="panel-backdrop"></div>
-
-<div id="panel">
-  <div id="panel-header">
-    <div>
-      <h1>Trail Planner</h1>
-      <p>Tap map to add waypoints</p>
+  <!-- ── BOTTOM DRAWER ── -->
+  <div id="drawer">
+    <div id="drawer-handle">
+      <div id="drawer-handle-left">
+        <span>Trail Info</span>
+        <div id="drawer-stats-mini">
+          <span><b id="mini-dist">—</b> dist</span>
+          <span><b id="mini-time">—</b> time</span>
+          <span><b id="mini-asc">—</b> ↑</span>
+        </div>
+      </div>
+      <svg id="drawer-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </div>
-    <button id="panel-close" aria-label="Close panel">×</button>
-  </div>
 
-  <!-- Stats -->
-  <div id="stats">
-    <div class="stat"><div class="stat-label">Distance</div><div class="stat-value" id="stat-dist">—</div></div>
-    <div class="stat"><div class="stat-label">Est. Time</div><div class="stat-value" id="stat-time">—</div></div>
-    <div class="stat"><div class="stat-label">↑ Ascent</div><div class="stat-value" id="stat-asc">—</div></div>
-    <div class="stat"><div class="stat-label">↓ Descent</div><div class="stat-value" id="stat-desc">—</div></div>
-  </div>
+    <div id="drawer-content">
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat"><div class="stat-label">Distance</div><div class="stat-value" id="stat-dist">—</div></div>
+        <div class="stat"><div class="stat-label">Est. Time</div><div class="stat-value" id="stat-time">—</div></div>
+        <div class="stat"><div class="stat-label">↑ Ascent</div><div class="stat-value" id="stat-asc">—</div></div>
+        <div class="stat"><div class="stat-label">↓ Descent</div><div class="stat-value" id="stat-desc">—</div></div>
+      </div>
 
-  <!-- Unit toggle -->
-  <div id="unit-toggle-row">
-    <button class="unit-btn active" id="unit-km">km</button>
-    <button class="unit-btn" id="unit-mi">mi</button>
-  </div>
+      <!-- Unit + Profile -->
+      <div class="row">
+        <button class="unit-btn active" id="unit-km">km</button>
+        <button class="unit-btn" id="unit-mi">mi</button>
+        <select id="profile-select">
+          <option value="foot-hiking">🥾 Hiking</option>
+          <option value="foot-walking">🚶 Walking</option>
+          <option value="cycling-regular">🚲 Cycling</option>
+          <option value="cycling-road">🏎 Road</option>
+          <option value="driving-car">🚗 Car</option>
+        </select>
+      </div>
 
-  <!-- Route profile -->
-  <div id="profile-row">
-    <select id="profile-select">
-      <option value="foot-hiking">🥾 Hiking</option>
-      <option value="foot-walking">🚶 Walking</option>
-      <option value="cycling-regular">🚲 Cycling</option>
-      <option value="cycling-road">🏎 Road Cycling</option>
-      <option value="driving-car">🚗 Car</option>
-    </select>
-  </div>
-
-  <!-- Toolbar -->
-  <div id="toolbar">
-    <div class="toolbar-row">
-      <button class="btn" id="btn-undo" disabled>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 00-4-4H4"/></svg>Undo
-      </button>
-      <button class="btn" id="btn-redo" disabled>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 014-4h12"/></svg>Redo
-      </button>
-      <button class="btn danger" id="btn-clear" disabled>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>Clear
-      </button>
-    </div>
-  </div>
-
-  <!-- Export -->
-  <div id="export-section">
-    <div class="section-title">Import / Export</div>
-    <div class="toolbar-row" style="margin-bottom:5px;">
-      <button class="btn" id="btn-import">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="17"/></svg>Import GPX
-      </button>
-      <button class="btn" id="btn-upload-gpx">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="17"/></svg>Load GPX
-      </button>
-      <input type="file" id="gpx-file-input" accept=".gpx" style="display:none" />
+      <!-- Import / Export -->
+      <div class="sec-label">Import / Export</div>
+      <div class="row" style="margin-bottom:5px;">
+        <button class="top-btn" id="btn-import" style="flex:1;justify-content:center;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="17"/></svg>
+          Import GPX
+        </button>
+        <button class="top-btn" id="btn-upload-gpx" style="flex:1;justify-content:center;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="17"/></svg>
+          Load GPX
+        </button>
+      </div>
+      <div class="row">
+        <button class="top-btn" id="btn-gpx" disabled style="flex:1;justify-content:center;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export GPX
+        </button>
+        <button class="top-btn" id="btn-geojson" disabled style="flex:1;justify-content:center;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          GeoJSON
+        </button>
+      </div>
+      <input type="file" id="gpx-file-input"   accept=".gpx" style="display:none" />
       <input type="file" id="gpx-upload-input" accept=".gpx" multiple style="display:none" />
-    </div>
-    <div class="toolbar-row">
-      <button class="btn" id="btn-gpx" disabled>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>GPX
-      </button>
-      <button class="btn" id="btn-geojson" disabled>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>GeoJSON
-      </button>
-    </div>
-  </div>
 
-  <!-- Elevation -->
-  <div id="elevation-section">
-    <div id="elevation-title">
-      <span class="section-title" style="margin-bottom:0;">Elevation Profile</span>
-      <span id="straight-badge" class="straight-badge" style="display:none;">⚠ straight-line</span>
-    </div>
-    <div id="elevation-container">
-      <div class="elev-empty" id="elev-empty">Add 2+ points to see profile</div>
+      <!-- Elevation -->
+      <div class="sec-label">
+        Elevation Profile
+        <span id="straight-badge" class="straight-badge" style="display:none;">⚠ straight-line</span>
+      </div>
+      <div id="elev-empty" class="elev-empty">Add 2+ points to see profile</div>
       <canvas id="elevation-canvas" style="display:none;"></canvas>
+
+      <!-- Waypoints -->
+      <div class="sec-label">Waypoints</div>
+      <div id="waypoints-list"></div>
+
+      <!-- Loaded Routes -->
+      <div class="sec-label">Loaded Routes</div>
+      <div id="routes-list"></div>
     </div>
   </div>
-
-  <!-- Waypoints -->
-  <div id="waypoints-section">
-    <div class="section-title">Waypoints</div>
-    <div id="waypoints-list"></div>
-  </div>
-
-  <!-- Loaded Routes -->
-  <div id="routes-section">
-    <div class="section-title">Loaded Routes</div>
-    <div id="routes-list"></div>
-  </div>
-</div>
-
-<div id="map"></div>
-
-<div id="right-toolbar">
-  <button class="map-btn" id="btn-menu-toggle">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-      <path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7M9 20l6-3M9 20V7m6 13l5.447-2.724A1 1 0 0021 16.382V5.618a1 1 0 00-1.447-.894L15 7m0 13V7M9 7l6-3"/>
-    </svg>
-    Menu
-  </button>
-
-  <div class="toolbar-divider"></div>
-
-  <button class="map-btn" id="btn-satellite">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
-    <span id="btn-satellite-label">Topo</span>
-  </button>
-  <button class="map-btn" id="btn-routing">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M12 5l7 7-7 7"/></svg>
-    <span id="btn-routing-label">Route On</span>
-  </button>
-  <button class="map-btn" id="btn-terrain">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20l5-10 4 6 3-4 6 8H3z"/></svg>
-    <span id="btn-terrain-label">3D</span>
-  </button>
-  <button class="map-btn" id="btn-locate">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg>
-    Locate
-  </button>
-
-  <div class="toolbar-divider"></div>
-
-  <button class="map-btn" id="map-btn-undo" disabled>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 00-4-4H4"/></svg>
-    Undo
-  </button>
-  <button class="map-btn" id="map-btn-redo" disabled>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 014-4h12"/></svg>
-    Redo
-  </button>
-  <button class="map-btn" id="map-btn-clear" disabled style="color:var(--red);">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-    Clear
-  </button>
-
-  <div class="toolbar-divider"></div>
-
-  <button class="map-btn" id="map-btn-gpx" disabled>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-    GPX
-  </button>
-  <button class="map-btn" id="map-btn-load-gpx">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="17"/></svg>
-    Load
-  </button>
-
-  <div class="toolbar-divider"></div>
-
-  <div id="map-dist-display" id="map-dist-wrap">
-    <span id="map-dist-val">—</span>
-  </div>
-
-  <div id="map-routes-list"></div>
 </div>
 
 <div id="toast"></div>
@@ -550,53 +305,27 @@
 const ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjY3ZTM0ODI5YjQ2NDFmYTEyODZiYmY0MDNjMWM2YWI2NjNhNGUwMWRlZTUwNTVmMTAyNGQwMTYwIiwiaCI6Im11cm11cjY0In0=";
 const HIKING_KMH = 4;
 
-let points = [];
-let undoStack = [[]];
-let redoStack = [];
-let currentRoute = null;
-let usedFallback = false;
-let mapStyleIdx = 0; // 0=OSM, 1=Topo, 2=Satellite
-let useRouting = true;
-let useMetric = true;
-let terrainOn = false;
-let lastStats = null;
+let points = [], undoStack = [[]], redoStack = [];
+let currentRoute = null, usedFallback = false;
+let mapStyleIdx = 0, useRouting = true, useMetric = true, terrainOn = false, lastStats = null;
 
 /* ── MAP STYLES ── */
-const osmStyle = {
-  version: 8,
-  sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenStreetMap contributors' } },
-  layers: [{ id: 'osm-tiles', type: 'raster', source: 'osm' }]
-};
-const topoStyle = {
-  version: 8,
-  sources: { topo: { type: 'raster', tiles: ['https://tile.opentopomap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenTopoMap contributors' } },
-  layers: [{ id: 'topo-tiles', type: 'raster', source: 'topo' }]
-};
-const satStyle = {
-  version: 8,
-  sources: { sat: { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256, attribution: '© Esri' } },
-  layers: [{ id: 'sat-tiles', type: 'raster', source: 'sat' }]
-};
+const osmStyle  = { version:8, sources:{ osm:{ type:'raster', tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize:256, attribution:'© OpenStreetMap contributors' } }, layers:[{ id:'osm-tiles', type:'raster', source:'osm' }] };
+const topoStyle = { version:8, sources:{ topo:{ type:'raster', tiles:['https://tile.opentopomap.org/{z}/{x}/{y}.png'], tileSize:256, attribution:'© OpenTopoMap contributors' } }, layers:[{ id:'topo-tiles', type:'raster', source:'topo' }] };
+const satStyle  = { version:8, sources:{ sat:{ type:'raster', tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize:256, attribution:'© Esri' } }, layers:[{ id:'sat-tiles', type:'raster', source:'sat' }] };
 const MAP_STYLES = [osmStyle, topoStyle, satStyle];
 const MAP_STYLE_LABELS = ['Topo', 'Satellite', 'OSM'];
 
-const map = new maplibregl.Map({ container: 'map', style: osmStyle, center: [8.5417, 47.3769], zoom: 13 });
+const map = new maplibregl.Map({ container:'map', style:osmStyle, center:[-1.7,53.4], zoom:11 });
 map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
 map.addControl(new maplibregl.ScaleControl(), 'bottom-left');
+map.on('load', () => { restoreAllLayers(); renderRoutesList(); });
 
-map.on('load', () => {
-  restoreAllLayers();
-  renderRoutesList();
-});
-
-/* ── CLICK HANDLER ── */
+/* ── CLICK ── */
 map.on('click', async e => {
-  const newPts = [...points, { lat: e.lngLat.lat, lng: e.lngLat.lng }];
+  const newPts = [...points, { lat:e.lngLat.lat, lng:e.lngLat.lng }];
   applyPoints(newPts, true);
-  if (newPts.length >= 2) {
-    if (useRouting) await doRoute(newPts);
-    else fallbackRoute(newPts);
-  }
+  if (newPts.length >= 2) { useRouting ? await doRoute(newPts) : fallbackRoute(newPts); }
 });
 
 /* ── ROUTING ── */
@@ -604,646 +333,415 @@ async function doRoute(pts) {
   const profile = document.getElementById('profile-select')?.value || 'foot-hiking';
   try {
     const res = await fetch(`https://api.openrouteservice.org/v2/directions/${profile}/geojson`, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${ORS_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ coordinates: pts.map(p => [p.lng, p.lat]), elevation: true })
+      method:'POST',
+      headers:{ 'Authorization':`Bearer ${ORS_KEY}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ coordinates:pts.map(p=>[p.lng,p.lat]), elevation:true })
     });
     if (!res.ok) { fallbackRoute(pts); return; }
     const geo = await res.json();
-    const feature = geo.features[0];
-    const summary = feature.properties.summary;
-    currentRoute = feature.geometry;
-    usedFallback = false;
+    const feature = geo.features[0], summary = feature.properties.summary;
+    currentRoute = feature.geometry; usedFallback = false;
     paintRoute();
-    lastStats = { distance: summary.distance, time: summary.duration * 1000, ascend: summary.ascent, descend: summary.descent };
-    updateStats(lastStats);
-    drawElevation(feature.geometry.coordinates);
-  } catch (err) {
-    fallbackRoute(pts);
-  }
+    lastStats = { distance:summary.distance, time:summary.duration*1000, ascend:summary.ascent, descend:summary.descent };
+    updateStats(lastStats); drawElevation(feature.geometry.coordinates);
+  } catch { fallbackRoute(pts); }
   updateButtons();
 }
 
 function fallbackRoute(pts) {
   usedFallback = true;
-  currentRoute = { type: "LineString", coordinates: pts.map(p => [p.lng, p.lat]) };
-  paintRoute();
-  lastStats = computeStraightStats(pts);
-  updateStats(lastStats);
-  drawElevation(null);
-  showToast("No trail data — showing straight line");
+  currentRoute = { type:'LineString', coordinates:pts.map(p=>[p.lng,p.lat]) };
+  paintRoute(); lastStats = computeStraightStats(pts); updateStats(lastStats); drawElevation(null);
+  showToast('No trail data — showing straight line');
 }
 
 /* ── MARKERS ── */
 function updateMarkers() {
   if (!map.getSource('markers')) return;
-  map.getSource('markers').setData({
-    type: 'FeatureCollection',
-    features: points.map((p, i) => ({
-      type: 'Feature',
-      properties: { role: i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'mid' },
-      geometry: { type: 'Point', coordinates: [p.lng, p.lat] }
-    }))
-  });
+  map.getSource('markers').setData({ type:'FeatureCollection', features:points.map((p,i) => ({
+    type:'Feature', properties:{ role:i===0?'start':i===points.length-1?'end':'mid' },
+    geometry:{ type:'Point', coordinates:[p.lng,p.lat] }
+  })) });
 }
 
-/* ── STATE ── */
-function applyPoints(newPts, save = false) {
-  if (save) { undoStack.push(JSON.parse(JSON.stringify(points))); redoStack = []; }
-  points = newPts;
-  updateMarkers(); updateWaypointList(); updateButtons();
+function applyPoints(newPts, save=false) {
+  if (save) { undoStack.push(JSON.parse(JSON.stringify(points))); redoStack=[]; }
+  points = newPts; updateMarkers(); updateWaypointList(); updateButtons();
 }
 
-/* ── WAYPOINT LIST ── */
 function updateWaypointList() {
-  const list = document.getElementById('waypoints-list');
-  if (!list) return;
+  const list = document.getElementById('waypoints-list'); if (!list) return;
   list.innerHTML = '';
-  if (!points.length) {
-    list.innerHTML = '<div style="font-size:10px;color:var(--text-sec);">No waypoints yet.</div>';
-    return;
-  }
-  points.forEach((p, i) => {
-    const div = document.createElement('div');
-    div.className = 'waypoint-item';
-    const numClass = i === 0 ? 'first' : i === points.length - 1 ? 'last' : '';
-    div.innerHTML = `<div class="wp-num ${numClass}">${i + 1}</div><div class="wp-coords">${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}</div>`;
+  if (!points.length) { list.innerHTML='<div style="font-size:10px;color:var(--text-sec);">No waypoints yet.</div>'; return; }
+  points.forEach((p,i) => {
+    const div = document.createElement('div'); div.className='waypoint-item';
+    const nc = i===0?'first':i===points.length-1?'last':'';
+    div.innerHTML=`<div class="wp-num ${nc}">${i+1}</div><div>${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}</div>`;
     list.appendChild(div);
   });
 }
 
 /* ── HELPERS ── */
 function computeStraightStats(pts) {
-  let km = 0;
-  for (let i = 1; i < pts.length; i++) km += haversine(pts[i - 1], pts[i]);
-  return { distance: km * 1000, time: (km / HIKING_KMH) * 3600000, ascend: null, descend: null };
+  let km=0; for(let i=1;i<pts.length;i++) km+=haversine(pts[i-1],pts[i]);
+  return { distance:km*1000, time:(km/HIKING_KMH)*3600000, ascend:null, descend:null };
 }
-
-function haversine(a, b) {
-  const R = 6371, toRad = Math.PI / 180;
-  const dLat = (b.lat - a.lat) * toRad, dLng = (b.lng - a.lng) * toRad;
-  const s = Math.sin(dLat/2)**2 + Math.cos(a.lat*toRad)*Math.cos(b.lat*toRad)*Math.sin(dLng/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1-s));
+function haversine(a,b) {
+  const R=6371,r=Math.PI/180, dLat=(b.lat-a.lat)*r, dLng=(b.lng-a.lng)*r;
+  const s=Math.sin(dLat/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));
 }
-
-function paintRoute() { map.getSource('route').setData({ type: 'Feature', geometry: currentRoute }); updateArrows(); }
-function emptyFeature() { return { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }; }
-function emptyFeatureCollection() { return { type: 'FeatureCollection', features: [] }; }
-
+function paintRoute() { map.getSource('route').setData({ type:'Feature', geometry:currentRoute }); updateArrows(); }
+function emptyFeature() { return { type:'Feature', geometry:{ type:'LineString', coordinates:[] } }; }
+function emptyFC() { return { type:'FeatureCollection', features:[] }; }
 function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
 }
 
 /* ── STATS ── */
 function updateStats({ distance, time, ascend, descend }) {
   const fmt = v => {
-    if (v == null) return '—';
-    if (useMetric) return v >= 1000 ? `${(v/1000).toFixed(2)}<span>km</span>` : `${Math.round(v)}<span>m</span>`;
-    const mi = v / 1609.34;
-    return mi >= 0.1 ? `${mi.toFixed(2)}<span>mi</span>` : `${Math.round(v*3.281)}<span>ft</span>`;
+    if (v==null) return '—';
+    if (useMetric) return v>=1000?`${(v/1000).toFixed(2)}<span>km</span>`:`${Math.round(v)}<span>m</span>`;
+    const mi=v/1609.34; return mi>=0.1?`${mi.toFixed(2)}<span>mi</span>`:`${Math.round(v*3.281)}<span>ft</span>`;
   };
   const fmtTime = ms => {
-    if (ms == null) return '—';
-    const h = Math.floor(ms/3600000), m = Math.round((ms%3600000)/60000);
-    return h > 0 ? `${h}<span>h</span> ${m}<span>m</span>` : `${m}<span>m</span>`;
+    if (ms==null) return '—';
+    const h=Math.floor(ms/3600000),m=Math.round((ms%3600000)/60000);
+    return h>0?`${h}<span>h</span> ${m}<span>m</span>`:`${m}<span>m</span>`;
   };
-  const fmtElev = v => v != null ? `${Math.round(v)}<span>m</span>` : '—';
-
-  document.getElementById('stat-dist').innerHTML  = fmt(distance);
-  document.getElementById('stat-time').innerHTML  = fmtTime(time);
-  document.getElementById('stat-asc').innerHTML   = fmtElev(ascend);
-  document.getElementById('stat-desc').innerHTML  = fmtElev(descend);
-
-  const barDistVal = document.getElementById('bar-dist-val');
-  if (barDistVal) barDistVal.innerHTML = fmt(distance);
-  const mapDistVal = document.getElementById('map-dist-val');
-  if (mapDistVal) mapDistVal.innerHTML = fmt(distance);
+  const fmtElev = v => v!=null?`${Math.round(v)}<span>m</span>`:'—';
+  document.getElementById('stat-dist').innerHTML = fmt(distance);
+  document.getElementById('stat-time').innerHTML = fmtTime(time);
+  document.getElementById('stat-asc').innerHTML  = fmtElev(ascend);
+  document.getElementById('stat-desc').innerHTML = fmtElev(descend);
+  const fmtP = v => { if(v==null)return'—'; return useMetric?(v>=1000?`${(v/1000).toFixed(1)}km`:`${Math.round(v)}m`):`${(v/1609.34).toFixed(1)}mi`; };
+  document.getElementById('mini-dist').textContent = fmtP(distance);
+  document.getElementById('mini-time').textContent = time==null?'—':(()=>{const h=Math.floor(time/3600000),m=Math.round((time%3600000)/60000);return h>0?`${h}h${m}m`:`${m}m`;})();
+  document.getElementById('mini-asc').textContent  = ascend!=null?`${Math.round(ascend)}m`:'—';
+  document.getElementById('top-dist-val').innerHTML = fmt(distance);
 }
 
 /* ── ELEVATION ── */
 function drawElevation(coords) {
-  const empty  = document.getElementById('elev-empty');
-  const canvas = document.getElementById('elevation-canvas');
-  const badge  = document.getElementById('straight-badge');
-  if (!coords || coords.length < 2 || coords[0].length < 3) {
-    empty.style.display = 'flex'; canvas.style.display = 'none';
-    if (badge) badge.style.display = usedFallback ? 'inline-block' : 'none';
-    return;
+  const empty=document.getElementById('elev-empty'), canvas=document.getElementById('elevation-canvas'), badge=document.getElementById('straight-badge');
+  if (!coords||coords.length<2||coords[0].length<3) {
+    empty.style.display='flex'; canvas.style.display='none';
+    if(badge) badge.style.display=usedFallback?'inline-block':'none'; return;
   }
-  if (badge) badge.style.display = 'none';
-  empty.style.display = 'none'; canvas.style.display = 'block';
-  const elevations = coords.map(c => c[2]);
-  const minE = Math.min(...elevations), maxE = Math.max(...elevations), range = maxE - minE || 1;
-  const dpr = window.devicePixelRatio || 1;
-  const W = canvas.offsetWidth || 260, H = canvas.offsetHeight || 72;
-  canvas.width = W*dpr; canvas.height = H*dpr;
-  const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr); ctx.clearRect(0, 0, W, H);
-  const pad = { top: 6, bottom: 18, left: 4, right: 4 };
-  const chartW = W - pad.left - pad.right, chartH = H - pad.top - pad.bottom;
-  const xOf = i => pad.left + (i/(elevations.length-1))*chartW;
-  const yOf = e => pad.top + chartH - ((e-minE)/range)*chartH;
-  const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top+chartH);
-  grad.addColorStop(0, 'rgba(79,195,247,0.35)');
-  grad.addColorStop(1, 'rgba(79,195,247,0.02)');
-  ctx.beginPath();
-  ctx.moveTo(xOf(0), yOf(elevations[0]));
-  elevations.forEach((e, i) => { if (i > 0) ctx.lineTo(xOf(i), yOf(e)); });
-  ctx.lineTo(xOf(elevations.length-1), pad.top+chartH);
-  ctx.lineTo(xOf(0), pad.top+chartH);
-  ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(xOf(0), yOf(elevations[0]));
-  elevations.forEach((e, i) => { if (i > 0) ctx.lineTo(xOf(i), yOf(e)); });
-  ctx.strokeStyle = '#4FC3F7'; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.fillStyle = '#8888AA'; ctx.font = `9px Inter, sans-serif`;
-  ctx.textAlign = 'left'; ctx.fillText(`${Math.round(minE)}m`, pad.left+2, H-4);
-  ctx.textAlign = 'right'; ctx.fillText(`${Math.round(maxE)}m`, W-pad.right-2, pad.top+9);
+  if(badge) badge.style.display='none';
+  empty.style.display='none'; canvas.style.display='block';
+  const elevations=coords.map(c=>c[2]), minE=Math.min(...elevations), maxE=Math.max(...elevations), range=maxE-minE||1;
+  const dpr=window.devicePixelRatio||1, W=canvas.offsetWidth||260, H=64;
+  canvas.width=W*dpr; canvas.height=H*dpr;
+  const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,H);
+  const pad={top:4,bottom:16,left:3,right:3}, cW=W-pad.left-pad.right, cH=H-pad.top-pad.bottom;
+  const xOf=i=>pad.left+(i/(elevations.length-1))*cW;
+  const yOf=e=>pad.top+cH-((e-minE)/range)*cH;
+  const grad=ctx.createLinearGradient(0,pad.top,0,pad.top+cH);
+  grad.addColorStop(0,'rgba(79,195,247,0.3)'); grad.addColorStop(1,'rgba(79,195,247,0.01)');
+  ctx.beginPath(); ctx.moveTo(xOf(0),yOf(elevations[0]));
+  elevations.forEach((e,i)=>{if(i>0)ctx.lineTo(xOf(i),yOf(e));});
+  ctx.lineTo(xOf(elevations.length-1),pad.top+cH); ctx.lineTo(xOf(0),pad.top+cH);
+  ctx.closePath(); ctx.fillStyle=grad; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(xOf(0),yOf(elevations[0]));
+  elevations.forEach((e,i)=>{if(i>0)ctx.lineTo(xOf(i),yOf(e));});
+  ctx.strokeStyle='#4FC3F7'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.fillStyle='#7788AA'; ctx.font=`8px Inter,sans-serif`;
+  ctx.textAlign='left'; ctx.fillText(`${Math.round(minE)}m`,pad.left+2,H-3);
+  ctx.textAlign='right'; ctx.fillText(`${Math.round(maxE)}m`,W-pad.right-2,pad.top+8);
 }
 
 /* ── BUTTONS ── */
 function updateButtons() {
-  const has = points.length > 0, hasTwo = points.length >= 2;
-  document.getElementById('btn-undo').disabled    = undoStack.length === 0;
-  document.getElementById('btn-redo').disabled    = redoStack.length === 0;
+  const has=points.length>0, hasTwo=points.length>=2;
+  document.getElementById('btn-undo').disabled    = undoStack.length===0;
+  document.getElementById('btn-redo').disabled    = redoStack.length===0;
   document.getElementById('btn-clear').disabled   = !has;
   document.getElementById('btn-gpx').disabled     = !hasTwo;
   document.getElementById('btn-geojson').disabled = !hasTwo;
-  if (barUndo) barUndo.disabled = undoStack.length === 0;
-  if (barRedo) barRedo.disabled = redoStack.length === 0;
-  if (barGpx)  barGpx.disabled  = !hasTwo;
-  const mapBtnUndo  = document.getElementById('map-btn-undo');
-  const mapBtnRedo  = document.getElementById('map-btn-redo');
-  const mapBtnClear = document.getElementById('map-btn-clear');
-  const mapBtnGpx   = document.getElementById('map-btn-gpx');
-  if (mapBtnUndo)  mapBtnUndo.disabled  = undoStack.length === 0;
-  if (mapBtnRedo)  mapBtnRedo.disabled  = redoStack.length === 0;
-  if (mapBtnClear) mapBtnClear.disabled = !has;
-  if (mapBtnGpx)   mapBtnGpx.disabled   = !hasTwo;
 }
 
-/* ── UNIT TOGGLE ── */
+/* ── UNIT ── */
 function setUnit(metric) {
-  useMetric = metric;
-  document.getElementById('unit-km').classList.toggle('active', metric);
-  document.getElementById('unit-mi').classList.toggle('active', !metric);
-  if (lastStats) updateStats(lastStats);
+  useMetric=metric;
+  document.getElementById('unit-km').classList.toggle('active',metric);
+  document.getElementById('unit-mi').classList.toggle('active',!metric);
+  if(lastStats) updateStats(lastStats);
 }
-
-document.getElementById('unit-km').addEventListener('click', () => setUnit(true));
-document.getElementById('unit-mi').addEventListener('click', () => setUnit(false));
-
-// Re-route when profile changes
-document.getElementById('profile-select').addEventListener('change', () => {
-  if (points.length >= 2) { if (useRouting) doRoute(points); else fallbackRoute(points); }
+document.getElementById('unit-km').addEventListener('click',()=>setUnit(true));
+document.getElementById('unit-mi').addEventListener('click',()=>setUnit(false));
+document.getElementById('top-dist').addEventListener('click',()=>setUnit(!useMetric));
+document.getElementById('profile-select').addEventListener('change',()=>{
+  if(points.length>=2){ useRouting?doRoute(points):fallbackRoute(points); }
 });
 
-/* ── BUTTON WIRING ── */
-document.getElementById('btn-undo').addEventListener('click', () => {
-  if (!undoStack.length) return;
+/* ── UNDO / REDO / CLEAR ── */
+document.getElementById('btn-undo').addEventListener('click',()=>{
+  if(!undoStack.length) return;
   redoStack.push(JSON.parse(JSON.stringify(points)));
-  const prev = undoStack.pop();
-  applyPoints(prev);
-  if (prev.length >= 2) { if (useRouting) doRoute(prev); else fallbackRoute(prev); } else clearRoute();
+  const prev=undoStack.pop(); applyPoints(prev);
+  if(prev.length>=2){useRouting?doRoute(prev):fallbackRoute(prev);}else clearRoute();
 });
-document.getElementById('btn-redo').addEventListener('click', () => {
-  if (!redoStack.length) return;
+document.getElementById('btn-redo').addEventListener('click',()=>{
+  if(!redoStack.length) return;
   undoStack.push(JSON.parse(JSON.stringify(points)));
-  const next = redoStack.pop();
-  applyPoints(next);
-  if (next.length >= 2) { if (useRouting) doRoute(next); else fallbackRoute(next); } else clearRoute();
+  const next=redoStack.pop(); applyPoints(next);
+  if(next.length>=2){useRouting?doRoute(next):fallbackRoute(next);}else clearRoute();
 });
-document.getElementById('btn-clear').addEventListener('click', () => {
-  undoStack.push(JSON.parse(JSON.stringify(points)));
-  redoStack = []; applyPoints([]); clearRoute();
+document.getElementById('btn-clear').addEventListener('click',()=>{
+  undoStack.push(JSON.parse(JSON.stringify(points))); redoStack=[]; applyPoints([]); clearRoute();
 });
-document.getElementById('btn-gpx').addEventListener('click', () => {
-  if (!currentRoute) return;
-  const coords = currentRoute.coordinates;
-  const trkpts = coords.map(c => `    <trkpt lat="${c[1]}" lon="${c[0]}">${c[2] != null ? `<ele>${c[2]}</ele>` : ''}</trkpt>`).join('\n');
-  const gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Trail Planner">\n  <trk><n>My Trail</n><trkseg>\n${trkpts}\n  </trkseg></trk>\n</gpx>`;
-  download('trail.gpx', gpx, 'application/gpx+xml');
+
+/* ── EXPORT ── */
+document.getElementById('btn-gpx').addEventListener('click',()=>{
+  if(!currentRoute) return;
+  const coords=currentRoute.coordinates;
+  const trkpts=coords.map(c=>`    <trkpt lat="${c[1]}" lon="${c[0]}">${c[2]!=null?`<ele>${c[2]}</ele>`:''}</trkpt>`).join('\n');
+  download('trail.gpx',`<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Trail Planner">\n  <trk><n>My Trail</n><trkseg>\n${trkpts}\n  </trkseg></trk>\n</gpx>`,'application/gpx+xml');
 });
-document.getElementById('btn-geojson').addEventListener('click', () => {
-  if (!currentRoute) return;
-  download('trail.geojson', JSON.stringify({ type: 'Feature', geometry: currentRoute }, null, 2), 'application/json');
+document.getElementById('btn-geojson').addEventListener('click',()=>{
+  if(!currentRoute) return;
+  download('trail.geojson',JSON.stringify({type:'Feature',geometry:currentRoute},null,2),'application/json');
 });
 
 /* ── GPX IMPORT ── */
-document.getElementById('btn-import').addEventListener('click', () => document.getElementById('gpx-file-input').click());
-document.getElementById('gpx-file-input').addEventListener('change', function () {
-  const file = this.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
+document.getElementById('btn-import').addEventListener('click',()=>document.getElementById('gpx-file-input').click());
+document.getElementById('gpx-file-input').addEventListener('change',function(){
+  const file=this.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
     try {
-      const parser = new DOMParser();
-      const xml = parser.parseFromString(e.target.result, 'application/xml');
-      if (xml.querySelector('parsererror')) throw new Error('Invalid GPX');
-      const coords = [];
-      xml.querySelectorAll('trkpt, rtept').forEach(pt => {
-        const lat = parseFloat(pt.getAttribute('lat')), lng = parseFloat(pt.getAttribute('lon'));
-        const ele = pt.querySelector('ele');
-        if (!isNaN(lat) && !isNaN(lng)) coords.push(ele ? [lng, lat, parseFloat(ele.textContent)] : [lng, lat]);
+      const parser=new DOMParser(), xml=parser.parseFromString(e.target.result,'application/xml');
+      if(xml.querySelector('parsererror')) throw new Error();
+      const coords=[];
+      xml.querySelectorAll('trkpt,rtept').forEach(pt=>{
+        const lat=parseFloat(pt.getAttribute('lat')),lng=parseFloat(pt.getAttribute('lon'));
+        const ele=pt.querySelector('ele');
+        if(!isNaN(lat)&&!isNaN(lng)) coords.push(ele?[lng,lat,parseFloat(ele.textContent)]:[lng,lat]);
       });
-      if (coords.length < 2) { showToast('No track points found in GPX'); return; }
-      currentRoute = { type: 'LineString', coordinates: coords };
-      usedFallback = false; paintRoute();
-      const lngs = coords.map(c => c[0]), lats = coords.map(c => c[1]);
-      map.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: 40, duration: 800 });
-      drawElevation(coords[0].length === 3 ? coords : null);
-      const pts = coords.map(c => ({ lat: c[1], lng: c[0] }));
-      lastStats = computeStraightStats(pts);
-      updateStats(lastStats);
-      document.getElementById('btn-gpx').disabled = false;
-      document.getElementById('btn-geojson').disabled = false;
+      if(coords.length<2){showToast('No track points found');return;}
+      currentRoute={type:'LineString',coordinates:coords}; usedFallback=false; paintRoute();
+      const lngs=coords.map(c=>c[0]),lats=coords.map(c=>c[1]);
+      map.fitBounds([[Math.min(...lngs),Math.min(...lats)],[Math.max(...lngs),Math.max(...lats)]],{padding:40,duration:800});
+      drawElevation(coords[0].length===3?coords:null);
+      lastStats=computeStraightStats(coords.map(c=>({lat:c[1],lng:c[0]}))); updateStats(lastStats);
+      document.getElementById('btn-gpx').disabled=false; document.getElementById('btn-geojson').disabled=false;
       showToast(`Loaded ${coords.length} track points`);
-    } catch (err) { showToast('Failed to load GPX file'); }
-    this.value = '';
+    } catch { showToast('Failed to load GPX'); }
+    this.value='';
   };
   reader.readAsText(file);
 });
 
-/* ── SATELLITE ── */
-/* ── RESTORE ALL LAYERS after style switch ── */
-function addArrowImage() {
-  const size = 28;
-  const canvas = document.createElement('canvas');
-  canvas.width = size; canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  // Soft dark outline for subtle contrast
-  ctx.fillStyle = 'rgba(0,40,70,0.45)';
-  ctx.beginPath();
-  ctx.moveTo(size * 0.13, size * 0.13);
-  ctx.lineTo(size * 0.90, size * 0.5);
-  ctx.lineTo(size * 0.13, size * 0.87);
-  ctx.closePath();
-  ctx.fill();
-  // Light blue semi-transparent arrow to blend with route
-  ctx.fillStyle = 'rgba(200,240,255,0.82)';
-  ctx.beginPath();
-  ctx.moveTo(size * 0.22, size * 0.22);
-  ctx.lineTo(size * 0.80, size * 0.5);
-  ctx.lineTo(size * 0.22, size * 0.78);
-  ctx.closePath();
-  ctx.fill();
-  const imageData = ctx.getImageData(0, 0, size, size);
-  map.addImage('arrow', { width: size, height: size, data: imageData.data });
-}
-
-function restoreAllLayers() {
-  addArrowImage();
-  // Restore all loaded GPX routes FIRST (below active route)
-  loadedRoutes.forEach(r => {
-    if (!map.getSource(r.sourceId)) {
-      map.addSource(r.sourceId, { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: r.coords } } });
-      map.addLayer({ id: r.layerId, type: 'line', source: r.sourceId, paint: { 'line-width': 3, 'line-color': r.color, 'line-opacity': 0.85 } });
-    }
-  });
-  // Active route outline + line
-  map.addSource('route', { type: 'geojson', data: currentRoute ? { type: 'Feature', geometry: currentRoute } : emptyFeature() });
-  map.addLayer({ id: 'route-outline', type: 'line', source: 'route', paint: { 'line-width': 8, 'line-color': '#000000', 'line-opacity': 0.35 } });
-  map.addLayer({ id: 'route-line', type: 'line', source: 'route', paint: { 'line-width': 4, 'line-color': '#4FC3F7' } });
-  // Arrows as point features so they sit above line layers (symbol layers always float above line layers in MapLibre)
-  map.addSource('route-arrow-points', { type: 'geojson', data: emptyFeatureCollection() });
-  map.addLayer({ id: 'route-arrows', type: 'symbol', source: 'route-arrow-points', layout: { 'icon-image': 'arrow', 'icon-size': 0.85, 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-rotate': ['get', 'bearing'] } });
-  // Waypoint markers on top of everything
-  map.addSource('markers', { type: 'geojson', data: emptyFeatureCollection() });
-  map.addLayer({ id: 'marker-points', type: 'circle', source: 'markers', paint: { 'circle-radius': 7, 'circle-color': ['case', ['==', ['get', 'role'], 'start'], '#4CAF50', ['==', ['get', 'role'], 'end'], '#CC2222', '#4FC3F7'], 'circle-stroke-width': 2, 'circle-stroke-color': '#0D0D1A' } });
-  updateMarkers();
-}
-
-// Sample arrow points along the current route with bearing
-function updateArrows() {
-  if (!map.getSource('route-arrow-points')) return;
-  if (!currentRoute || !currentRoute.coordinates || currentRoute.coordinates.length < 2) {
-    map.getSource('route-arrow-points').setData(emptyFeatureCollection());
-    return;
-  }
-  const coords = currentRoute.coordinates;
-  // Build cumulative distances
-  const dists = [0];
-  for (let i = 1; i < coords.length; i++) {
-    const dx = coords[i][0] - coords[i-1][0], dy = coords[i][1] - coords[i-1][1];
-    dists.push(dists[i-1] + Math.sqrt(dx*dx + dy*dy));
-  }
-  const total = dists[dists.length - 1];
-  const spacing = total / Math.max(1, Math.round(total / 0.015)); // ~1 mile between arrows
-  const features = [];
-  for (let d = spacing; d < total - spacing * 0.5; d += spacing) {
-    // Find segment
-    let seg = 1;
-    while (seg < dists.length - 1 && dists[seg] < d) seg++;
-    const t = (d - dists[seg-1]) / (dists[seg] - dists[seg-1]);
-    const lng = coords[seg-1][0] + t * (coords[seg][0] - coords[seg-1][0]);
-    const lat = coords[seg-1][1] + t * (coords[seg][1] - coords[seg-1][1]);
-    const dx = coords[seg][0] - coords[seg-1][0], dy = coords[seg][1] - coords[seg-1][1];
-    const bearing = Math.atan2(dx, dy) * 180 / Math.PI - 90; // screen bearing, corrected for icon orientation
-    features.push({ type: 'Feature', properties: { bearing }, geometry: { type: 'Point', coordinates: [lng, lat] } });
-  }
-  map.getSource('route-arrow-points').setData({ type: 'FeatureCollection', features });
-}
-
-/* ── MAP STYLE CYCLE ── */
-document.getElementById('btn-satellite').addEventListener('click', function () {
-  mapStyleIdx = (mapStyleIdx + 1) % 3;
-  map.setStyle(MAP_STYLES[mapStyleIdx]);
-  document.getElementById('btn-satellite-label').textContent = MAP_STYLE_LABELS[mapStyleIdx];
-  this.classList.toggle('active', mapStyleIdx !== 0);
-  map.once('idle', () => {
-    restoreAllLayers();
-    if (terrainOn) setTimeout(() => enableTerrain(), 100);
-  });
-});
-
-/* ── ROUTING TOGGLE ── */
-document.getElementById('btn-routing').addEventListener('click', function () {
-  useRouting = !useRouting;
-  this.classList.toggle('active', useRouting);
-  document.getElementById('btn-routing-label').textContent = useRouting ? 'Route On' : 'Route Off';
-  if (points.length >= 2) {
-    if (useRouting) doRoute(points);
-    else fallbackRoute(points);
-  }
-});
-
-/* ── LOCATE ── */
-document.getElementById('btn-locate').addEventListener('click', () => {
-  if (!navigator.geolocation) { showToast('Geolocation not supported'); return; }
-  navigator.geolocation.getCurrentPosition(
-    pos => map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 14 }),
-    () => showToast('Could not get location')
-  );
-});
-
-/* ── 3D TERRAIN ── */
-
-function enableTerrain() {
-  if (!map.getSource('terrain-dem')) {
-    map.addSource('terrain-dem', {
-      type: 'raster-dem',
-      encoding: 'terrarium',
-      tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
-      tileSize: 256,
-      maxzoom: 15,
-      attribution: 'Terrain data © Mapzen/AWS'
-    });
-  }
-  if (!map.getLayer('hills')) {
-    map.addLayer({ id: 'hills', type: 'hillshade', source: 'terrain-dem',
-      paint: { 'hillshade-shadow-color': '#3a2e1e', 'hillshade-highlight-color': '#f0ece0', 'hillshade-illumination-direction': 335, 'hillshade-exaggeration': 0.7 }
-    }, 'route-outline');
-  }
-  map.setTerrain({ source: 'terrain-dem', exaggeration: 3.0 });
-  map.setMaxPitch(85);
-  map.easeTo({ pitch: 72, duration: 1000 });
-  terrainOn = true;
-  document.getElementById('btn-terrain').classList.add('active');
-  document.getElementById('btn-terrain-label').textContent = '3D Off';
-  showToast('3D terrain on — drag to tilt');
-}
-
-function disableTerrain() {
-  map.setTerrain(null);
-  if (map.getLayer('hills')) map.removeLayer('hills');
-  if (map.getSource('terrain-dem')) map.removeSource('terrain-dem');
-  map.setMaxPitch(60);
-  map.easeTo({ pitch: 0, duration: 800 });
-  terrainOn = false;
-  document.getElementById('btn-terrain').classList.remove('active');
-  document.getElementById('btn-terrain-label').textContent = '3D';
-  showToast('3D terrain off');
-}
-
-document.getElementById('btn-terrain').addEventListener('click', () => {
-  terrainOn ? disableTerrain() : enableTerrain();
-});
-
-// Re-apply terrain after map style switch if it was on
-const _origRestoreAllLayers = restoreAllLayers;
-function restoreAllLayersWithTerrain() {
-  _origRestoreAllLayers();
-  if (terrainOn) {
-    // Re-add terrain after style switch
-    setTimeout(() => enableTerrain(), 100);
-  }
-}
-
-/* ── MOBILE PANEL ── */
-const panel    = document.getElementById('panel');
-const backdrop = document.getElementById('panel-backdrop');
-const closeBtn = document.getElementById('panel-close');
-const barMenu  = document.getElementById('bar-menu');
-const barUndo  = document.getElementById('bar-undo');
-const barRedo  = document.getElementById('bar-redo');
-const barGpx   = document.getElementById('bar-gpx');
-
-function openPanel()  {
-  panel.classList.add('open');
-  backdrop.classList.add('show');
-  document.getElementById('map').classList.add('panel-open');
-}
-function closePanel() {
-  panel.classList.remove('open');
-  backdrop.classList.remove('show');
-  document.getElementById('map').classList.remove('panel-open');
-}
-
-if (barMenu) barMenu.addEventListener('click', openPanel);
-if (closeBtn) closeBtn.addEventListener('click', closePanel);
-if (backdrop) backdrop.addEventListener('click', closePanel);
-
-const mapMenuToggle = document.getElementById('btn-menu-toggle');
-if (mapMenuToggle) mapMenuToggle.addEventListener('click', () => {
-  panel.classList.contains('open') ? closePanel() : openPanel();
-});
-if (barUndo) barUndo.addEventListener('click', () => document.getElementById('btn-undo').click());
-if (barRedo) barRedo.addEventListener('click', () => document.getElementById('btn-redo').click());
-if (barGpx)  barGpx.addEventListener('click',  () => document.getElementById('btn-gpx').click());
-
-// Right toolbar wiring
-const mapBtnUndo  = document.getElementById('map-btn-undo');
-const mapBtnRedo  = document.getElementById('map-btn-redo');
-const mapBtnClear = document.getElementById('map-btn-clear');
-const mapBtnGpx   = document.getElementById('map-btn-gpx');
-const mapDistDisp = document.getElementById('map-dist-display');
-
-if (mapBtnUndo)  mapBtnUndo.addEventListener('click',  () => document.getElementById('btn-undo').click());
-if (mapBtnRedo)  mapBtnRedo.addEventListener('click',  () => document.getElementById('btn-redo').click());
-if (mapBtnClear) mapBtnClear.addEventListener('click', () => document.getElementById('btn-clear').click());
-if (mapBtnGpx)   mapBtnGpx.addEventListener('click',  () => document.getElementById('btn-gpx').click());
-
-// Tap distance display to toggle km/mi
-if (mapDistDisp) mapDistDisp.addEventListener('click', () => setUnit(!useMetric));
-
-/* ── CLEAR ROUTE ── */
-function clearRoute() {
-  currentRoute = null; usedFallback = false; lastStats = null;
-  if (map.getSource('route')) map.getSource('route').setData(emptyFeature());
-  if (map.getSource('route-arrow-points')) map.getSource('route-arrow-points').setData(emptyFeatureCollection());
-  document.getElementById('stat-dist').innerHTML = '—';
-  document.getElementById('stat-time').innerHTML = '—';
-  document.getElementById('stat-asc').innerHTML  = '—';
-  document.getElementById('stat-desc').innerHTML = '—';
-  const barDistVal = document.getElementById('bar-dist-val');
-  if (barDistVal) barDistVal.innerHTML = '—';
-  const mapDistVal = document.getElementById('map-dist-val');
-  if (mapDistVal) mapDistVal.innerHTML = '—';
-  const empty = document.getElementById('elev-empty'), canvas = document.getElementById('elevation-canvas');
-  if (empty) empty.style.display = 'flex';
-  if (canvas) canvas.style.display = 'none';
-}
-
-/* ── LOADED ROUTES ── */
-let loadedRoutes = []; // [{name, coords, color, layerId, sourceId}]
-let activeRouteIdx = -1;
-const ROUTE_COLORS = ['#4FC3F7','#4CAF50','#F97316','#9333EA','#EF4444','#FFDD00','#FF69B4','#00CED1'];
-
-function parseGpxCoords(text) {
-  const parser = new DOMParser();
-  const xml = parser.parseFromString(text, 'application/xml');
-  if (xml.querySelector('parsererror')) return null;
-  const coords = [];
-  xml.querySelectorAll('trkpt, rtept').forEach(pt => {
-    const lat = parseFloat(pt.getAttribute('lat')), lng = parseFloat(pt.getAttribute('lon'));
-    const ele = pt.querySelector('ele');
-    if (!isNaN(lat) && !isNaN(lng)) coords.push(ele ? [lng, lat, parseFloat(ele.textContent)] : [lng, lat]);
-  });
-  return coords.length >= 2 ? coords : null;
-}
-
-function getRouteName(xml, filename) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(xml, 'application/xml');
-  const nameEl = doc.querySelector('trk > name, rte > name, gpx > name');
-  if (nameEl && nameEl.textContent.trim()) return nameEl.textContent.trim();
-  return filename.replace(/\.gpx$/i, '');
-}
-
-function addLoadedRoute(name, coords) {
-  const idx = loadedRoutes.length;
-  const color = ROUTE_COLORS[idx % ROUTE_COLORS.length];
-  const sourceId = `loaded-route-${idx}`;
-  const layerId  = `loaded-route-line-${idx}`;
-  map.addSource(sourceId, { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coords } } });
-  map.addLayer({ id: layerId, type: 'line', source: sourceId, paint: { 'line-width': 3, 'line-color': color, 'line-opacity': 0.85 } });
-  // Compute distance
-  let km = 0;
-  for (let i = 1; i < coords.length; i++) {
-    const a = { lat: coords[i-1][1], lng: coords[i-1][0] };
-    const b = { lat: coords[i][1],   lng: coords[i][0] };
-    km += haversine(a, b);
-  }
-  loadedRoutes.push({ name, coords, color, sourceId, layerId, km });
-  renderRoutesList();
-  fitAllRoutes();
-}
-
-function removeLoadedRoute(idx) {
-  const r = loadedRoutes[idx];
-  if (map.getLayer(r.layerId))  map.removeLayer(r.layerId);
-  if (map.getSource(r.sourceId)) map.removeSource(r.sourceId);
-  loadedRoutes.splice(idx, 1);
-  // Re-index remaining layers
-  if (activeRouteIdx === idx) activeRouteIdx = -1;
-  else if (activeRouteIdx > idx) activeRouteIdx--;
-  renderRoutesList();
-}
-
-function showRoute(idx) {
-  activeRouteIdx = idx;
-  const r = loadedRoutes[idx];
-  const lngs = r.coords.map(c => c[0]), lats = r.coords.map(c => c[1]);
-  map.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: 40, duration: 800 });
-  drawElevation(r.coords[0].length === 3 ? r.coords : null);
-  renderRoutesList();
-}
-
-function fitAllRoutes() {
-  if (!loadedRoutes.length) return;
-  const allCoords = loadedRoutes.flatMap(r => r.coords);
-  const lngs = allCoords.map(c => c[0]), lats = allCoords.map(c => c[1]);
-  map.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: 40, duration: 800 });
-}
-
-function renderRoutesList() {
-  const list = document.getElementById('routes-list');
-  const mapList = document.getElementById('map-routes-list');
-
-  // Panel list
-  if (list) {
-    list.innerHTML = '';
-    if (!loadedRoutes.length) {
-      list.innerHTML = '<div class="routes-empty">No routes loaded yet.</div>';
-    } else {
-      loadedRoutes.forEach((r, idx) => {
-        const distStr = useMetric ? `${r.km.toFixed(2)} km` : `${(r.km / 1.60934).toFixed(2)} mi`;
-        const card = document.createElement('div');
-        card.className = 'route-card' + (activeRouteIdx === idx ? ' active' : '');
-        card.innerHTML = `
-          <div class="route-card-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18" style="stroke:${r.color}"/></svg>
-          </div>
-          <div class="route-card-info">
-            <div class="route-card-name">${r.name}</div>
-            <div class="route-card-meta">${distStr} · ${r.coords.length} pts</div>
-          </div>
-          <button class="route-card-delete" title="Remove">×</button>
-        `;
-        card.querySelector('.route-card-delete').addEventListener('click', e => { e.stopPropagation(); removeLoadedRoute(idx); });
-        card.addEventListener('click', () => showRoute(idx));
-        list.appendChild(card);
-      });
-    }
-  }
-
-  // Right toolbar list
-  if (mapList) {
-    mapList.innerHTML = '';
-    loadedRoutes.forEach((r, idx) => {
-      const card = document.createElement('div');
-      card.className = 'map-route-card' + (activeRouteIdx === idx ? ' active' : '');
-      card.innerHTML = `
-        <div class="map-route-dot" style="background:${r.color}"></div>
-        <div class="map-route-card-name">${r.name}</div>
-        <span class="map-route-card-x" title="Remove">×</span>
-      `;
-      card.querySelector('.map-route-card-x').addEventListener('click', e => { e.stopPropagation(); removeLoadedRoute(idx); });
-      card.addEventListener('click', () => showRoute(idx));
-      mapList.appendChild(card);
-    });
-  }
-}
-
-// Upload multiple GPX files
-document.getElementById('btn-upload-gpx').addEventListener('click', () => document.getElementById('gpx-upload-input').click());
-document.getElementById('map-btn-load-gpx').addEventListener('click', () => document.getElementById('gpx-upload-input').click());
-document.getElementById('gpx-upload-input').addEventListener('change', function () {
-  const files = Array.from(this.files);
-  if (!files.length) return;
-  let loaded = 0;
-  files.forEach(file => {
-    const reader = new FileReader();
-    reader.onload = e => {
+/* ── LOAD MULTIPLE GPX ── */
+document.getElementById('btn-upload-gpx').addEventListener('click',()=>document.getElementById('gpx-upload-input').click());
+document.getElementById('gpx-upload-input').addEventListener('change',function(){
+  const files=Array.from(this.files); if(!files.length) return;
+  let loaded=0;
+  files.forEach(file=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
       try {
-        const coords = parseGpxCoords(e.target.result);
-        if (!coords) { showToast(`No track points in ${file.name}`); return; }
-        const name = getRouteName(e.target.result, file.name);
-        addLoadedRoute(name, coords);
-        loaded++;
-        if (loaded === files.length) showToast(`Loaded ${loaded} route${loaded > 1 ? 's' : ''}`);
+        const coords=parseGpxCoords(e.target.result);
+        if(!coords){showToast(`No track points in ${file.name}`);return;}
+        addLoadedRoute(getRouteName(e.target.result,file.name),coords); loaded++;
+        if(loaded===files.length) showToast(`Loaded ${loaded} route${loaded>1?'s':''}`);
       } catch { showToast(`Failed to load ${file.name}`); }
     };
     reader.readAsText(file);
   });
-  this.value = '';
+  this.value='';
 });
 
-function download(filename, text, mime) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([text], { type: mime }));
-  a.download = filename; a.click();
+function download(filename,text,mime) {
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type:mime})); a.download=filename; a.click();
+}
+
+/* ── CLEAR ── */
+function clearRoute() {
+  currentRoute=null; usedFallback=false; lastStats=null;
+  if(map.getSource('route')) map.getSource('route').setData(emptyFeature());
+  if(map.getSource('route-arrow-points')) map.getSource('route-arrow-points').setData(emptyFC());
+  ['stat-dist','stat-time','stat-asc','stat-desc'].forEach(id=>document.getElementById(id).innerHTML='—');
+  ['mini-dist','mini-time','mini-asc'].forEach(id=>document.getElementById(id).textContent='—');
+  document.getElementById('top-dist-val').innerHTML='—';
+  const empty=document.getElementById('elev-empty'),canvas=document.getElementById('elevation-canvas');
+  if(empty) empty.style.display='flex'; if(canvas) canvas.style.display='none';
+}
+
+/* ── MAP STYLE ── */
+document.getElementById('btn-satellite').addEventListener('click',function(){
+  mapStyleIdx=(mapStyleIdx+1)%3; map.setStyle(MAP_STYLES[mapStyleIdx]);
+  document.getElementById('btn-satellite-label').textContent=MAP_STYLE_LABELS[mapStyleIdx];
+  this.classList.toggle('active',mapStyleIdx!==0);
+  map.once('idle',()=>{ restoreAllLayers(); if(terrainOn) setTimeout(()=>enableTerrain(),100); });
+});
+
+/* ── ROUTING ── */
+document.getElementById('btn-routing').addEventListener('click',function(){
+  useRouting=!useRouting; this.classList.toggle('active',useRouting);
+  document.getElementById('btn-routing-label').textContent=useRouting?'Route On':'Route Off';
+  if(points.length>=2){ useRouting?doRoute(points):fallbackRoute(points); }
+});
+
+/* ── LOCATE ── */
+document.getElementById('btn-locate').addEventListener('click',()=>{
+  if(!navigator.geolocation){showToast('Geolocation not supported');return;}
+  navigator.geolocation.getCurrentPosition(
+    pos=>map.flyTo({center:[pos.coords.longitude,pos.coords.latitude],zoom:14}),
+    ()=>showToast('Could not get location')
+  );
+});
+
+/* ── 3D TERRAIN ── */
+function enableTerrain() {
+  if(!map.getSource('terrain-dem')) {
+    map.addSource('terrain-dem',{ type:'raster-dem', encoding:'terrarium', tiles:['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], tileSize:256, maxzoom:15, attribution:'Terrain © Mapzen/AWS' });
+  }
+  if(!map.getLayer('hills')) {
+    map.addLayer({ id:'hills', type:'hillshade', source:'terrain-dem',
+      paint:{ 'hillshade-shadow-color':'#3a2e1e','hillshade-highlight-color':'#f0ece0','hillshade-illumination-direction':335,'hillshade-exaggeration':0.7 }
+    },'route-outline');
+  }
+  map.setTerrain({ source:'terrain-dem', exaggeration:3.0 });
+  map.setMaxPitch(85); map.easeTo({ pitch:72, duration:1000 });
+  terrainOn=true;
+  document.getElementById('btn-terrain').classList.add('active');
+  document.getElementById('btn-terrain-label').textContent='3D Off';
+  showToast('3D terrain on — drag to tilt');
+}
+function disableTerrain() {
+  map.setTerrain(null);
+  if(map.getLayer('hills')) map.removeLayer('hills');
+  if(map.getSource('terrain-dem')) map.removeSource('terrain-dem');
+  map.setMaxPitch(60); map.easeTo({ pitch:0, duration:800 });
+  terrainOn=false;
+  document.getElementById('btn-terrain').classList.remove('active');
+  document.getElementById('btn-terrain-label').textContent='3D';
+  showToast('3D terrain off');
+}
+document.getElementById('btn-terrain').addEventListener('click',()=>{ terrainOn?disableTerrain():enableTerrain(); });
+
+/* ── DRAWER ── */
+document.getElementById('drawer-handle').addEventListener('click',()=>{
+  document.getElementById('drawer').classList.toggle('open');
+});
+
+/* ── ARROW IMAGE ── */
+function addArrowImage() {
+  const size=28, canvas=document.createElement('canvas');
+  canvas.width=size; canvas.height=size;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='rgba(0,40,70,0.45)';
+  ctx.beginPath(); ctx.moveTo(size*0.13,size*0.13); ctx.lineTo(size*0.90,size*0.5); ctx.lineTo(size*0.13,size*0.87); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='rgba(200,240,255,0.82)';
+  ctx.beginPath(); ctx.moveTo(size*0.22,size*0.22); ctx.lineTo(size*0.80,size*0.5); ctx.lineTo(size*0.22,size*0.78); ctx.closePath(); ctx.fill();
+  map.addImage('arrow',{ width:size, height:size, data:ctx.getImageData(0,0,size,size).data });
+}
+
+/* ── RESTORE LAYERS ── */
+function restoreAllLayers() {
+  addArrowImage();
+  loadedRoutes.forEach(r=>{
+    if(!map.getSource(r.sourceId)) {
+      map.addSource(r.sourceId,{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:r.coords}}});
+      map.addLayer({id:r.layerId,type:'line',source:r.sourceId,paint:{'line-width':3,'line-color':r.color,'line-opacity':0.85}});
+    }
+  });
+  map.addSource('route',{type:'geojson',data:currentRoute?{type:'Feature',geometry:currentRoute}:emptyFeature()});
+  map.addLayer({id:'route-outline',type:'line',source:'route',paint:{'line-width':8,'line-color':'#000000','line-opacity':0.35}});
+  map.addLayer({id:'route-line',   type:'line',source:'route',paint:{'line-width':4,'line-color':'#4FC3F7'}});
+  map.addSource('route-arrow-points',{type:'geojson',data:emptyFC()});
+  map.addLayer({id:'route-arrows',type:'symbol',source:'route-arrow-points',layout:{'icon-image':'arrow','icon-size':0.85,'icon-rotation-alignment':'map','icon-allow-overlap':true,'icon-ignore-placement':true,'icon-rotate':['get','bearing']}});
+  map.addSource('markers',{type:'geojson',data:emptyFC()});
+  map.addLayer({id:'marker-points',type:'circle',source:'markers',paint:{'circle-radius':7,'circle-color':['case',['==',['get','role'],'start'],'#4CAF50',['==',['get','role'],'end'],'#CC2222','#4FC3F7'],'circle-stroke-width':2,'circle-stroke-color':'#0D0F1E'}});
+  updateMarkers();
+}
+
+/* ── ARROWS ── */
+function updateArrows() {
+  if(!map.getSource('route-arrow-points')) return;
+  if(!currentRoute||!currentRoute.coordinates||currentRoute.coordinates.length<2){ map.getSource('route-arrow-points').setData(emptyFC()); return; }
+  const coords=currentRoute.coordinates, dists=[0];
+  for(let i=1;i<coords.length;i++){
+    const dx=coords[i][0]-coords[i-1][0],dy=coords[i][1]-coords[i-1][1];
+    dists.push(dists[i-1]+Math.sqrt(dx*dx+dy*dy));
+  }
+  const total=dists[dists.length-1], spacing=total/Math.max(1,Math.round(total/0.015));
+  const features=[];
+  for(let d=spacing;d<total-spacing*0.5;d+=spacing){
+    let seg=1; while(seg<dists.length-1&&dists[seg]<d) seg++;
+    const t=(d-dists[seg-1])/(dists[seg]-dists[seg-1]);
+    const lng=coords[seg-1][0]+t*(coords[seg][0]-coords[seg-1][0]);
+    const lat=coords[seg-1][1]+t*(coords[seg][1]-coords[seg-1][1]);
+    const dx=coords[seg][0]-coords[seg-1][0],dy=coords[seg][1]-coords[seg-1][1];
+    features.push({type:'Feature',properties:{bearing:Math.atan2(dx,dy)*180/Math.PI-90},geometry:{type:'Point',coordinates:[lng,lat]}});
+  }
+  map.getSource('route-arrow-points').setData({type:'FeatureCollection',features});
+}
+
+/* ── LOADED ROUTES ── */
+let loadedRoutes=[], activeRouteIdx=-1;
+const ROUTE_COLORS=['#4FC3F7','#4CAF50','#F97316','#9333EA','#EF4444','#FFDD00','#FF69B4','#00CED1'];
+
+function parseGpxCoords(text) {
+  const xml=new DOMParser().parseFromString(text,'application/xml');
+  if(xml.querySelector('parsererror')) return null;
+  const coords=[];
+  xml.querySelectorAll('trkpt,rtept').forEach(pt=>{
+    const lat=parseFloat(pt.getAttribute('lat')),lng=parseFloat(pt.getAttribute('lon'));
+    const ele=pt.querySelector('ele');
+    if(!isNaN(lat)&&!isNaN(lng)) coords.push(ele?[lng,lat,parseFloat(ele.textContent)]:[lng,lat]);
+  });
+  return coords.length>=2?coords:null;
+}
+function getRouteName(xml,filename) {
+  const doc=new DOMParser().parseFromString(xml,'application/xml');
+  const n=doc.querySelector('trk > name, rte > name, gpx > name');
+  return (n&&n.textContent.trim())?n.textContent.trim():filename.replace(/\.gpx$/i,'');
+}
+function addLoadedRoute(name,coords) {
+  const idx=loadedRoutes.length, color=ROUTE_COLORS[idx%ROUTE_COLORS.length];
+  const sourceId=`loaded-route-${idx}`, layerId=`loaded-route-line-${idx}`;
+  map.addSource(sourceId,{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:coords}}});
+  map.addLayer({id:layerId,type:'line',source:sourceId,paint:{'line-width':3,'line-color':color,'line-opacity':0.85}});
+  let km=0;
+  for(let i=1;i<coords.length;i++) km+=haversine({lat:coords[i-1][1],lng:coords[i-1][0]},{lat:coords[i][1],lng:coords[i][0]});
+  loadedRoutes.push({name,coords,color,sourceId,layerId,km}); renderRoutesList(); fitAllRoutes();
+}
+function removeLoadedRoute(idx) {
+  const r=loadedRoutes[idx];
+  if(map.getLayer(r.layerId)) map.removeLayer(r.layerId);
+  if(map.getSource(r.sourceId)) map.removeSource(r.sourceId);
+  loadedRoutes.splice(idx,1);
+  if(activeRouteIdx===idx) activeRouteIdx=-1; else if(activeRouteIdx>idx) activeRouteIdx--;
+  renderRoutesList();
+}
+function showRoute(idx) {
+  activeRouteIdx=idx; const r=loadedRoutes[idx];
+  const lngs=r.coords.map(c=>c[0]),lats=r.coords.map(c=>c[1]);
+  map.fitBounds([[Math.min(...lngs),Math.min(...lats)],[Math.max(...lngs),Math.max(...lats)]],{padding:40,duration:800});
+  drawElevation(r.coords[0].length===3?r.coords:null); renderRoutesList();
+}
+function fitAllRoutes() {
+  if(!loadedRoutes.length) return;
+  const all=loadedRoutes.flatMap(r=>r.coords);
+  const lngs=all.map(c=>c[0]),lats=all.map(c=>c[1]);
+  map.fitBounds([[Math.min(...lngs),Math.min(...lats)],[Math.max(...lngs),Math.max(...lats)]],{padding:40,duration:800});
+}
+function renderRoutesList() {
+  const list=document.getElementById('routes-list'); if(!list) return;
+  list.innerHTML='';
+  if(!loadedRoutes.length){list.innerHTML='<div class="routes-empty">No routes loaded yet.</div>';return;}
+  loadedRoutes.forEach((r,idx)=>{
+    const distStr=useMetric?`${r.km.toFixed(2)} km`:`${(r.km/1.60934).toFixed(2)} mi`;
+    const card=document.createElement('div'); card.className='route-card'+(activeRouteIdx===idx?' active':'');
+    card.innerHTML=`<div class="route-dot" style="background:${r.color}"></div><div class="route-card-info"><div class="route-card-name">${r.name}</div><div class="route-card-meta">${distStr} · ${r.coords.length} pts</div></div><button class="route-card-del">×</button>`;
+    card.querySelector('.route-card-del').addEventListener('click',e=>{e.stopPropagation();removeLoadedRoute(idx);});
+    card.addEventListener('click',()=>showRoute(idx)); list.appendChild(card);
+  });
 }
 </script>
 </body>
