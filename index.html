@@ -213,6 +213,14 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
       Clear
     </button>
+    <button class="top-btn" id="btn-topbar-load">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="17"/></svg>
+      Load
+    </button>
+    <button class="top-btn" id="btn-topbar-download" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      GPX
+    </button>
     <div id="top-dist" title="Tap to toggle km/mi"><span id="top-dist-val">—</span></div>
   </div>
 
@@ -258,10 +266,6 @@
       <!-- Import / Export -->
       <div class="sec-label">Import / Export</div>
       <div class="row" style="margin-bottom:5px;">
-        <button class="top-btn" id="btn-import" style="flex:1;justify-content:center;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="17"/></svg>
-          Import GPX
-        </button>
         <button class="top-btn" id="btn-upload-gpx" style="flex:1;justify-content:center;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="17"/></svg>
           Load GPX
@@ -277,7 +281,6 @@
           GeoJSON
         </button>
       </div>
-      <input type="file" id="gpx-file-input"   accept=".gpx" style="display:none" />
       <input type="file" id="gpx-upload-input" accept=".gpx" multiple style="display:none" />
 
       <!-- Elevation -->
@@ -461,6 +464,7 @@ function updateButtons() {
   document.getElementById('btn-clear').disabled   = !has;
   document.getElementById('btn-gpx').disabled     = !hasTwo;
   document.getElementById('btn-geojson').disabled = !hasTwo;
+  document.getElementById('btn-topbar-download').disabled = !hasTwo;
 }
 
 /* ── UNIT ── */
@@ -506,37 +510,10 @@ document.getElementById('btn-geojson').addEventListener('click',()=>{
   download('trail.geojson',JSON.stringify({type:'Feature',geometry:currentRoute},null,2),'application/json');
 });
 
-/* ── GPX IMPORT ── */
-document.getElementById('btn-import').addEventListener('click',()=>document.getElementById('gpx-file-input').click());
-document.getElementById('gpx-file-input').addEventListener('change',function(){
-  const file=this.files[0]; if(!file) return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    try {
-      const parser=new DOMParser(), xml=parser.parseFromString(e.target.result,'application/xml');
-      if(xml.querySelector('parsererror')) throw new Error();
-      const coords=[];
-      xml.querySelectorAll('trkpt,rtept').forEach(pt=>{
-        const lat=parseFloat(pt.getAttribute('lat')),lng=parseFloat(pt.getAttribute('lon'));
-        const ele=pt.querySelector('ele');
-        if(!isNaN(lat)&&!isNaN(lng)) coords.push(ele?[lng,lat,parseFloat(ele.textContent)]:[lng,lat]);
-      });
-      if(coords.length<2){showToast('No track points found');return;}
-      currentRoute={type:'LineString',coordinates:coords}; usedFallback=false; paintRoute();
-      const lngs=coords.map(c=>c[0]),lats=coords.map(c=>c[1]);
-      map.fitBounds([[Math.min(...lngs),Math.min(...lats)],[Math.max(...lngs),Math.max(...lats)]],{padding:40,duration:800});
-      drawElevation(coords[0].length===3?coords:null);
-      lastStats=computeStraightStats(coords.map(c=>({lat:c[1],lng:c[0]}))); updateStats(lastStats);
-      document.getElementById('btn-gpx').disabled=false; document.getElementById('btn-geojson').disabled=false;
-      showToast(`Loaded ${coords.length} track points`);
-    } catch { showToast('Failed to load GPX'); }
-    this.value='';
-  };
-  reader.readAsText(file);
-});
-
 /* ── LOAD MULTIPLE GPX ── */
 document.getElementById('btn-upload-gpx').addEventListener('click',()=>document.getElementById('gpx-upload-input').click());
+document.getElementById('btn-topbar-load').addEventListener('click',()=>document.getElementById('gpx-upload-input').click());
+document.getElementById('btn-topbar-download').addEventListener('click',()=>document.getElementById('btn-gpx').click());
 document.getElementById('gpx-upload-input').addEventListener('change',function(){
   const files=Array.from(this.files); if(!files.length) return;
   let loaded=0;
