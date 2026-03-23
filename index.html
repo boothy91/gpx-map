@@ -490,11 +490,11 @@
 
   <button class="map-btn" id="btn-satellite">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
-    Topo
+    <span id="btn-satellite-label">Topo</span>
   </button>
   <button class="map-btn" id="btn-routing">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M12 5l7 7-7 7"/></svg>
-    Route On
+    <span id="btn-routing-label">Route On</span>
   </button>
   <button class="map-btn" id="btn-locate">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg>
@@ -576,17 +576,7 @@ map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
 map.addControl(new maplibregl.ScaleControl(), 'bottom-left');
 
 map.on('load', () => {
-  map.addSource('route', { type: 'geojson', data: emptyFeature() });
-  map.addLayer({ id: 'route-line', type: 'line', source: 'route', paint: { 'line-width': 4, 'line-color': '#4FC3F7' } });
-  map.addSource('markers', { type: 'geojson', data: emptyFeatureCollection() });
-  map.addLayer({
-    id: 'marker-points', type: 'circle', source: 'markers',
-    paint: {
-      'circle-radius': 7,
-      'circle-color': ['case', ['==', ['get', 'role'], 'start'], '#4CAF50', ['==', ['get', 'role'], 'end'], '#CC2222', '#4FC3F7'],
-      'circle-stroke-width': 2, 'circle-stroke-color': '#0D0D1A'
-    }
-  });
+  restoreAllLayers();
   renderRoutesList();
 });
 
@@ -868,9 +858,27 @@ document.getElementById('gpx-file-input').addEventListener('change', function ()
 
 /* ── SATELLITE ── */
 /* ── RESTORE ALL LAYERS after style switch ── */
+function addArrowImage() {
+  const size = 20;
+  const canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'rgba(79,195,247,0.9)';
+  ctx.beginPath();
+  ctx.moveTo(size * 0.2, size * 0.2);
+  ctx.lineTo(size * 0.8, size * 0.5);
+  ctx.lineTo(size * 0.2, size * 0.8);
+  ctx.closePath();
+  ctx.fill();
+  const imageData = ctx.getImageData(0, 0, size, size);
+  map.addImage('arrow', { width: size, height: size, data: imageData.data });
+}
+
 function restoreAllLayers() {
+  addArrowImage();
   map.addSource('route', { type: 'geojson', data: currentRoute ? { type: 'Feature', geometry: currentRoute } : emptyFeature() });
   map.addLayer({ id: 'route-line', type: 'line', source: 'route', paint: { 'line-width': 4, 'line-color': '#4FC3F7' } });
+  map.addLayer({ id: 'route-arrows', type: 'symbol', source: 'route', layout: { 'symbol-placement': 'line', 'symbol-spacing': 60, 'icon-image': 'arrow', 'icon-size': 0.7, 'icon-allow-overlap': true, 'icon-ignore-placement': true } });
   map.addSource('markers', { type: 'geojson', data: emptyFeatureCollection() });
   map.addLayer({ id: 'marker-points', type: 'circle', source: 'markers', paint: { 'circle-radius': 7, 'circle-color': ['case', ['==', ['get', 'role'], 'start'], '#4CAF50', ['==', ['get', 'role'], 'end'], '#CC2222', '#4FC3F7'], 'circle-stroke-width': 2, 'circle-stroke-color': '#0D0D1A' } });
   // Restore all loaded GPX routes
@@ -887,7 +895,7 @@ function restoreAllLayers() {
 document.getElementById('btn-satellite').addEventListener('click', function () {
   mapStyleIdx = (mapStyleIdx + 1) % 3;
   map.setStyle(MAP_STYLES[mapStyleIdx]);
-  this.lastChild.textContent = ' ' + MAP_STYLE_LABELS[mapStyleIdx];
+  document.getElementById('btn-satellite-label').textContent = MAP_STYLE_LABELS[mapStyleIdx];
   this.classList.toggle('active', mapStyleIdx !== 0);
   map.once('idle', restoreAllLayers);
 });
@@ -896,8 +904,7 @@ document.getElementById('btn-satellite').addEventListener('click', function () {
 document.getElementById('btn-routing').addEventListener('click', function () {
   useRouting = !useRouting;
   this.classList.toggle('active', useRouting);
-  this.lastChild.textContent = useRouting ? ' Route On' : ' Route Off';
-  // Re-draw current points with new mode
+  document.getElementById('btn-routing-label').textContent = useRouting ? 'Route On' : 'Route Off';
   if (points.length >= 2) {
     if (useRouting) doRoute(points);
     else fallbackRoute(points);
