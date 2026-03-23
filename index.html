@@ -490,7 +490,11 @@
 
   <button class="map-btn" id="btn-satellite">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
-    Satellite
+    Topo
+  </button>
+  <button class="map-btn" id="btn-routing">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M12 5l7 7-7 7"/></svg>
+    Route On
   </button>
   <button class="map-btn" id="btn-locate">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg>
@@ -543,7 +547,8 @@ let undoStack = [[]];
 let redoStack = [];
 let currentRoute = null;
 let usedFallback = false;
-let isSatellite = false;
+let mapStyleIdx = 0; // 0=OSM, 1=Topo, 2=Satellite
+let useRouting = true;
 let useMetric = true;
 let lastStats = null;
 
@@ -553,11 +558,18 @@ const osmStyle = {
   sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenStreetMap contributors' } },
   layers: [{ id: 'osm-tiles', type: 'raster', source: 'osm' }]
 };
+const topoStyle = {
+  version: 8,
+  sources: { topo: { type: 'raster', tiles: ['https://tile.opentopomap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenTopoMap contributors' } },
+  layers: [{ id: 'topo-tiles', type: 'raster', source: 'topo' }]
+};
 const satStyle = {
   version: 8,
   sources: { sat: { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256, attribution: '© Esri' } },
   layers: [{ id: 'sat-tiles', type: 'raster', source: 'sat' }]
 };
+const MAP_STYLES = [osmStyle, topoStyle, satStyle];
+const MAP_STYLE_LABELS = ['Topo', 'Satellite', 'OSM'];
 
 const map = new maplibregl.Map({ container: 'map', style: osmStyle, center: [8.5417, 47.3769], zoom: 13 });
 map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
@@ -582,7 +594,10 @@ map.on('load', () => {
 map.on('click', async e => {
   const newPts = [...points, { lat: e.lngLat.lat, lng: e.lngLat.lng }];
   applyPoints(newPts, true);
-  if (newPts.length >= 2) await doRoute(newPts);
+  if (newPts.length >= 2) {
+    if (useRouting) await doRoute(newPts);
+    else fallbackRoute(newPts);
+  }
 });
 
 /* ── ROUTING ── */
@@ -783,7 +798,7 @@ document.getElementById('unit-mi').addEventListener('click', () => setUnit(false
 
 // Re-route when profile changes
 document.getElementById('profile-select').addEventListener('change', () => {
-  if (points.length >= 2) doRoute(points);
+  if (points.length >= 2) { if (useRouting) doRoute(points); else fallbackRoute(points); }
 });
 
 /* ── BUTTON WIRING ── */
@@ -792,14 +807,14 @@ document.getElementById('btn-undo').addEventListener('click', () => {
   redoStack.push(JSON.parse(JSON.stringify(points)));
   const prev = undoStack.pop();
   applyPoints(prev);
-  if (prev.length >= 2) doRoute(prev); else clearRoute();
+  if (prev.length >= 2) { if (useRouting) doRoute(prev); else fallbackRoute(prev); } else clearRoute();
 });
 document.getElementById('btn-redo').addEventListener('click', () => {
   if (!redoStack.length) return;
   undoStack.push(JSON.parse(JSON.stringify(points)));
   const next = redoStack.pop();
   applyPoints(next);
-  if (next.length >= 2) doRoute(next); else clearRoute();
+  if (next.length >= 2) { if (useRouting) doRoute(next); else fallbackRoute(next); } else clearRoute();
 });
 document.getElementById('btn-clear').addEventListener('click', () => {
   undoStack.push(JSON.parse(JSON.stringify(points)));
@@ -852,18 +867,41 @@ document.getElementById('gpx-file-input').addEventListener('change', function ()
 });
 
 /* ── SATELLITE ── */
-document.getElementById('btn-satellite').addEventListener('click', function () {
-  isSatellite = !isSatellite;
-  map.setStyle(isSatellite ? satStyle : osmStyle);
-  this.classList.toggle('active', isSatellite);
-  this.lastChild.textContent = isSatellite ? ' Topo' : ' Satellite';
-  map.once('idle', () => {
-    map.addSource('route', { type: 'geojson', data: currentRoute ? { type: 'Feature', geometry: currentRoute } : emptyFeature() });
-    map.addLayer({ id: 'route-line', type: 'line', source: 'route', paint: { 'line-width': 4, 'line-color': '#4FC3F7' } });
-    map.addSource('markers', { type: 'geojson', data: emptyFeatureCollection() });
-    map.addLayer({ id: 'marker-points', type: 'circle', source: 'markers', paint: { 'circle-radius': 7, 'circle-color': ['case', ['==', ['get', 'role'], 'start'], '#4CAF50', ['==', ['get', 'role'], 'end'], '#CC2222', '#4FC3F7'], 'circle-stroke-width': 2, 'circle-stroke-color': '#0D0D1A' } });
-    updateMarkers();
+/* ── RESTORE ALL LAYERS after style switch ── */
+function restoreAllLayers() {
+  map.addSource('route', { type: 'geojson', data: currentRoute ? { type: 'Feature', geometry: currentRoute } : emptyFeature() });
+  map.addLayer({ id: 'route-line', type: 'line', source: 'route', paint: { 'line-width': 4, 'line-color': '#4FC3F7' } });
+  map.addSource('markers', { type: 'geojson', data: emptyFeatureCollection() });
+  map.addLayer({ id: 'marker-points', type: 'circle', source: 'markers', paint: { 'circle-radius': 7, 'circle-color': ['case', ['==', ['get', 'role'], 'start'], '#4CAF50', ['==', ['get', 'role'], 'end'], '#CC2222', '#4FC3F7'], 'circle-stroke-width': 2, 'circle-stroke-color': '#0D0D1A' } });
+  // Restore all loaded GPX routes
+  loadedRoutes.forEach(r => {
+    if (!map.getSource(r.sourceId)) {
+      map.addSource(r.sourceId, { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: r.coords } } });
+      map.addLayer({ id: r.layerId, type: 'line', source: r.sourceId, paint: { 'line-width': 3, 'line-color': r.color, 'line-opacity': 0.85 } });
+    }
   });
+  updateMarkers();
+}
+
+/* ── MAP STYLE CYCLE ── */
+document.getElementById('btn-satellite').addEventListener('click', function () {
+  mapStyleIdx = (mapStyleIdx + 1) % 3;
+  map.setStyle(MAP_STYLES[mapStyleIdx]);
+  this.lastChild.textContent = ' ' + MAP_STYLE_LABELS[mapStyleIdx];
+  this.classList.toggle('active', mapStyleIdx !== 0);
+  map.once('idle', restoreAllLayers);
+});
+
+/* ── ROUTING TOGGLE ── */
+document.getElementById('btn-routing').addEventListener('click', function () {
+  useRouting = !useRouting;
+  this.classList.toggle('active', useRouting);
+  this.lastChild.textContent = useRouting ? ' Route On' : ' Route Off';
+  // Re-draw current points with new mode
+  if (points.length >= 2) {
+    if (useRouting) doRoute(points);
+    else fallbackRoute(points);
+  }
 });
 
 /* ── LOCATE ── */
