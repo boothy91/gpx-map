@@ -498,6 +498,10 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M12 5l7 7-7 7"/></svg>
     <span id="btn-routing-label">Route On</span>
   </button>
+  <button class="map-btn" id="btn-terrain">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20l5-10 4 6 3-4 6 8H3z"/></svg>
+    3D
+  </button>
   <button class="map-btn" id="btn-locate">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg>
     Locate
@@ -552,6 +556,7 @@ let usedFallback = false;
 let mapStyleIdx = 0; // 0=OSM, 1=Topo, 2=Satellite
 let useRouting = true;
 let useMetric = true;
+let terrainOn = false;
 let lastStats = null;
 
 /* ── MAP STYLES ── */
@@ -944,7 +949,10 @@ document.getElementById('btn-satellite').addEventListener('click', function () {
   map.setStyle(MAP_STYLES[mapStyleIdx]);
   document.getElementById('btn-satellite-label').textContent = MAP_STYLE_LABELS[mapStyleIdx];
   this.classList.toggle('active', mapStyleIdx !== 0);
-  map.once('idle', restoreAllLayers);
+  map.once('idle', () => {
+    restoreAllLayers();
+    if (terrainOn) setTimeout(() => enableTerrain(), 100);
+  });
 });
 
 /* ── ROUTING TOGGLE ── */
@@ -966,6 +974,56 @@ document.getElementById('btn-locate').addEventListener('click', () => {
     () => showToast('Could not get location')
   );
 });
+
+/* ── 3D TERRAIN ── */
+
+function enableTerrain() {
+  // Add DEM source if not present
+  if (!map.getSource('terrain-dem')) {
+    map.addSource('terrain-dem', {
+      type: 'raster-dem',
+      url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json',
+      tileSize: 256
+    });
+  }
+  // Add hillshade layer below route layers for depth
+  if (!map.getLayer('hills')) {
+    map.addLayer({ id: 'hills', type: 'hillshade', source: 'terrain-dem',
+      paint: { 'hillshade-shadow-color': '#473B24', 'hillshade-illumination-direction': 335, 'hillshade-exaggeration': 0.35 }
+    }, 'route-outline'); // insert below route so route stays on top
+  }
+  map.setTerrain({ source: 'terrain-dem', exaggeration: 1.5 });
+  map.setMaxPitch(85);
+  map.easeTo({ pitch: 60, duration: 800 });
+  terrainOn = true;
+  document.getElementById('btn-terrain').classList.add('active');
+  showToast('3D terrain on — drag to tilt');
+}
+
+function disableTerrain() {
+  map.setTerrain(null);
+  if (map.getLayer('hills')) map.removeLayer('hills');
+  if (map.getSource('terrain-dem')) map.removeSource('terrain-dem');
+  map.setMaxPitch(60);
+  map.easeTo({ pitch: 0, duration: 800 });
+  terrainOn = false;
+  document.getElementById('btn-terrain').classList.remove('active');
+  showToast('3D terrain off');
+}
+
+document.getElementById('btn-terrain').addEventListener('click', () => {
+  terrainOn ? disableTerrain() : enableTerrain();
+});
+
+// Re-apply terrain after map style switch if it was on
+const _origRestoreAllLayers = restoreAllLayers;
+function restoreAllLayersWithTerrain() {
+  _origRestoreAllLayers();
+  if (terrainOn) {
+    // Re-add terrain after style switch
+    setTimeout(() => enableTerrain(), 100);
+  }
+}
 
 /* ── MOBILE PANEL ── */
 const panel    = document.getElementById('panel');
