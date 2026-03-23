@@ -932,7 +932,7 @@ function updateArrows() {
     const lng = coords[seg-1][0] + t * (coords[seg][0] - coords[seg-1][0]);
     const lat = coords[seg-1][1] + t * (coords[seg][1] - coords[seg-1][1]);
     const dx = coords[seg][0] - coords[seg-1][0], dy = coords[seg][1] - coords[seg-1][1];
-    const bearing = Math.atan2(dx, dy) * 180 / Math.PI; // screen bearing
+    const bearing = Math.atan2(dx, dy) * 180 / Math.PI - 90; // screen bearing, corrected for icon orientation
     features.push({ type: 'Feature', properties: { bearing }, geometry: { type: 'Point', coordinates: [lng, lat] } });
   }
   map.getSource('route-arrow-points').setData({ type: 'FeatureCollection', features });
