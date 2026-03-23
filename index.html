@@ -308,7 +308,7 @@
 const ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjY3ZTM0ODI5YjQ2NDFmYTEyODZiYmY0MDNjMWM2YWI2NjNhNGUwMWRlZTUwNTVmMTAyNGQwMTYwIiwiaCI6Im11cm11cjY0In0=";
 const HIKING_KMH = 4;
 
-let points = [], undoStack = [[]], redoStack = [];
+let points = [], segments = [], undoStack = [], redoStack = [];
 let currentRoute = null, usedFallback = false;
 let mapStyleIdx = 0, useRouting = true, useMetric = true, terrainOn = false, lastStats = null;
 
@@ -326,35 +326,84 @@ map.on('load', () => { restoreAllLayers(); renderRoutesList(); });
 
 /* ── CLICK ── */
 map.on('click', async e => {
-  const newPts = [...points, { lat:e.lngLat.lat, lng:e.lngLat.lng }];
-  applyPoints(newPts, true);
-  if (newPts.length >= 2) { useRouting ? await doRoute(newPts) : fallbackRoute(newPts); }
+  const newPoint = { lat:e.lngLat.lat, lng:e.lngLat.lng };
+  const newPts = [...points, newPoint];
+  undoStack.push({ points: JSON.parse(JSON.stringify(points)), segments: JSON.parse(JSON.stringify(segments)) });
+  redoStack = [];
+  points = newPts;
+  updateMarkers(); updateWaypointList(); updateButtons();
+  if (newPts.length >= 2) {
+    const from = newPts[newPts.length-2], to = newPts[newPts.length-1];
+    if (useRouting) await doLastSegment(from, to);
+    else addStraightSegment(from, to);
+  }
 });
 
 /* ── ROUTING ── */
-async function doRoute(pts) {
+async function doLastSegment(from, to) {
   const profile = document.getElementById('profile-select')?.value || 'foot-hiking';
   try {
     const res = await fetch(`https://api.openrouteservice.org/v2/directions/${profile}/geojson`, {
       method:'POST',
       headers:{ 'Authorization':`Bearer ${ORS_KEY}`, 'Content-Type':'application/json' },
-      body: JSON.stringify({ coordinates:pts.map(p=>[p.lng,p.lat]), elevation:true })
+      body: JSON.stringify({ coordinates:[[from.lng,from.lat],[to.lng,to.lat]], elevation:true })
     });
-    if (!res.ok) { fallbackRoute(pts); return; }
+    if (!res.ok) { addStraightSegment(from, to); return; }
     const geo = await res.json();
-    const feature = geo.features[0], summary = feature.properties.summary;
-    currentRoute = feature.geometry; usedFallback = false;
-    paintRoute();
-    lastStats = { distance:summary.distance, time:summary.duration*1000, ascend:summary.ascent, descend:summary.descent };
-    updateStats(lastStats); drawElevation(feature.geometry.coordinates);
-  } catch { fallbackRoute(pts); }
+    segments.push({ coords: geo.features[0].geometry.coordinates, routed: true });
+    rebuildRoute();
+  } catch { addStraightSegment(from, to); }
   updateButtons();
 }
 
+function addStraightSegment(from, to) {
+  segments.push({ coords: [[from.lng,from.lat],[to.lng,to.lat]], routed: false });
+  rebuildRoute();
+  updateButtons();
+}
+
+async function rerouteAll() {
+  if (points.length < 2) return;
+  const profile = document.getElementById('profile-select')?.value || 'foot-hiking';
+  const newSegs = [];
+  for (let i = 0; i < points.length-1; i++) {
+    const from = points[i], to = points[i+1];
+    if (useRouting) {
+      try {
+        const res = await fetch(`https://api.openrouteservice.org/v2/directions/${profile}/geojson`, {
+          method:'POST', headers:{ 'Authorization':`Bearer ${ORS_KEY}`, 'Content-Type':'application/json' },
+          body: JSON.stringify({ coordinates:[[from.lng,from.lat],[to.lng,to.lat]], elevation:true })
+        });
+        if (res.ok) { const geo=await res.json(); newSegs.push({ coords:geo.features[0].geometry.coordinates, routed:true }); continue; }
+      } catch {}
+    }
+    newSegs.push({ coords:[[from.lng,from.lat],[to.lng,to.lat]], routed:false });
+  }
+  segments = newSegs; rebuildRoute();
+}
+
+function rebuildRoute() {
+  if (!segments.length) { clearRoute(); return; }
+  let allCoords = segments[0].coords.slice();
+  for (let i=1; i<segments.length; i++) allCoords = allCoords.concat(segments[i].coords.slice(1));
+  currentRoute = { type:'LineString', coordinates:allCoords };
+  usedFallback = segments.some(s=>!s.routed);
+  paintRoute();
+  let totalDist=0, totalAsc=0, totalDesc=0;
+  segments.forEach(s=>{
+    const pts=s.coords.map(c=>({lat:c[1],lng:c[0]}));
+    for(let i=1;i<pts.length;i++) totalDist+=haversine(pts[i-1],pts[i]);
+    if(s.coords[0].length>=3) for(let i=1;i<s.coords.length;i++){const d=s.coords[i][2]-s.coords[i-1][2];if(d>0)totalAsc+=d;else totalDesc+=Math.abs(d);}
+  });
+  lastStats = { distance:totalDist*1000, time:(totalDist/HIKING_KMH)*3600000, ascend:totalAsc||null, descend:totalDesc||null };
+  updateStats(lastStats);
+  drawElevation(allCoords[0]&&allCoords[0].length>=3?allCoords:null);
+}
+
 function fallbackRoute(pts) {
-  usedFallback = true;
-  currentRoute = { type:'LineString', coordinates:pts.map(p=>[p.lng,p.lat]) };
-  paintRoute(); lastStats = computeStraightStats(pts); updateStats(lastStats); drawElevation(null);
+  segments = [];
+  for(let i=0;i<pts.length-1;i++) segments.push({coords:[[pts[i].lng,pts[i].lat],[pts[i+1].lng,pts[i+1].lat]],routed:false});
+  rebuildRoute();
   showToast('No trail data — showing straight line');
 }
 
@@ -368,7 +417,7 @@ function updateMarkers() {
 }
 
 function applyPoints(newPts, save=false) {
-  if (save) { undoStack.push(JSON.parse(JSON.stringify(points))); redoStack=[]; }
+  if (save) { undoStack.push({ points:JSON.parse(JSON.stringify(points)), segments:JSON.parse(JSON.stringify(segments)) }); redoStack=[]; }
   points = newPts; updateMarkers(); updateWaypointList(); updateButtons();
 }
 
@@ -478,24 +527,28 @@ document.getElementById('unit-km').addEventListener('click',()=>setUnit(true));
 document.getElementById('unit-mi').addEventListener('click',()=>setUnit(false));
 document.getElementById('top-dist').addEventListener('click',()=>setUnit(!useMetric));
 document.getElementById('profile-select').addEventListener('change',()=>{
-  if(points.length>=2){ useRouting?doRoute(points):fallbackRoute(points); }
+  if(points.length>=2) rerouteAll();
 });
 
 /* ── UNDO / REDO / CLEAR ── */
 document.getElementById('btn-undo').addEventListener('click',()=>{
   if(!undoStack.length) return;
-  redoStack.push(JSON.parse(JSON.stringify(points)));
-  const prev=undoStack.pop(); applyPoints(prev);
-  if(prev.length>=2){useRouting?doRoute(prev):fallbackRoute(prev);}else clearRoute();
+  redoStack.push({ points:JSON.parse(JSON.stringify(points)), segments:JSON.parse(JSON.stringify(segments)) });
+  const prev=undoStack.pop(); points=prev.points; segments=prev.segments;
+  updateMarkers(); updateWaypointList(); updateButtons();
+  if(segments.length) rebuildRoute(); else clearRoute();
 });
 document.getElementById('btn-redo').addEventListener('click',()=>{
   if(!redoStack.length) return;
-  undoStack.push(JSON.parse(JSON.stringify(points)));
-  const next=redoStack.pop(); applyPoints(next);
-  if(next.length>=2){useRouting?doRoute(next):fallbackRoute(next);}else clearRoute();
+  undoStack.push({ points:JSON.parse(JSON.stringify(points)), segments:JSON.parse(JSON.stringify(segments)) });
+  const next=redoStack.pop(); points=next.points; segments=next.segments;
+  updateMarkers(); updateWaypointList(); updateButtons();
+  if(segments.length) rebuildRoute(); else clearRoute();
 });
 document.getElementById('btn-clear').addEventListener('click',()=>{
-  undoStack.push(JSON.parse(JSON.stringify(points))); redoStack=[]; applyPoints([]); clearRoute();
+  undoStack.push({ points:JSON.parse(JSON.stringify(points)), segments:JSON.parse(JSON.stringify(segments)) });
+  redoStack=[]; points=[]; segments=[];
+  updateMarkers(); updateWaypointList(); updateButtons(); clearRoute();
 });
 
 /* ── EXPORT ── */
@@ -538,7 +591,7 @@ function download(filename,text,mime) {
 
 /* ── CLEAR ── */
 function clearRoute() {
-  currentRoute=null; usedFallback=false; lastStats=null;
+  currentRoute=null; usedFallback=false; lastStats=null; segments=[];
   if(map.getSource('route')) map.getSource('route').setData(emptyFeature());
   if(map.getSource('route-arrow-points')) map.getSource('route-arrow-points').setData(emptyFC());
   ['stat-dist','stat-time','stat-asc','stat-desc'].forEach(id=>document.getElementById(id).innerHTML='—');
@@ -560,7 +613,7 @@ document.getElementById('btn-satellite').addEventListener('click',function(){
 document.getElementById('btn-routing').addEventListener('click',function(){
   useRouting=!useRouting; this.classList.toggle('active',useRouting);
   document.getElementById('btn-routing-label').textContent=useRouting?'Route On':'Route Off';
-  if(points.length>=2){ useRouting?doRoute(points):fallbackRoute(points); }
+  // Don't re-route existing segments — new segments use new mode
 });
 
 /* ── LOCATE ── */
