@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
   <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
@@ -176,6 +177,23 @@
     }
     #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
+    /* ── MODAL ── */
+    .modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
+    .modal-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
+    .modal-content { position: relative; background: var(--card); border: 1px solid var(--border); border-radius: 12px; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .modal-header h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--text); }
+    .modal-close { background: none; border: none; color: var(--text-sec); font-size: 28px; cursor: pointer; padding: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; transition: color 0.2s; }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 20px; }
+    .modal-footer { padding: 15px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; flex-shrink: 0; }
+    .changelog-item { margin-bottom: 18px; }
+    .changelog-item h3 { margin: 0 0 8px 0; font-size: 14px; color: var(--blue); font-weight: 600; }
+    .changelog-item p { margin: 0 0 8px 0; font-size: 12px; color: var(--text-sec); line-height: 1.5; }
+    .changelog-item ul { margin: 8px 0 0 16px; padding: 0; font-size: 12px; color: var(--text-sec); }
+    .changelog-item li { margin: 4px 0; line-height: 1.4; }
+    .changelog-item li strong { color: var(--text); }
+
     .maplibregl-ctrl-bottom-right { bottom: 0; }
     .maplibregl-ctrl-bottom-left  { bottom: 0; }
   </style>
@@ -281,7 +299,7 @@
           GeoJSON
         </button>
       </div>
-      <input type="file" id="gpx-upload-input" accept=".gpx" multiple style="display:none" />
+      <input type="file" id="gpx-upload-input" accept=".gpx,.tcx,.kml,.kmz" multiple style="display:none" />
 
       <!-- Elevation -->
       <div class="sec-label">
@@ -304,6 +322,37 @@
 
 <div id="toast"></div>
 
+<div id="changelog-modal" class="modal" style="display:none;">
+  <div class="modal-overlay"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>What's New</h2>
+      <button class="modal-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="changelog-item">
+        <h3>📂 Multi-Format Import</h3>
+        <p>Import multiple GPS files at once! Now supports:</p>
+        <ul>
+          <li><strong>GPX</strong> - Standard GPS format</li>
+          <li><strong>TCX</strong> - Garmin fitness files</li>
+          <li><strong>KML</strong> - Google Earth format</li>
+          <li><strong>KMZ</strong> - Compressed KML files</li>
+        </ul>
+      </div>
+      <div class="changelog-item">
+        <h3>🗂️ Batch Loading</h3>
+        <p>Select a whole folder or multiple individual files to load them all at once. Perfect for importing your entire GPS activity library!</p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="changelog-close" class="top-btn">Got it</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast">
+
 <script>
 const ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjY3ZTM0ODI5YjQ2NDFmYTEyODZiYmY0MDNjMWM2YWI2NjNhNGUwMWRlZTUwNTVmMTAyNGQwMTYwIiwiaCI6Im11cm11cjY0In0=";
 const HIKING_KMH = 4;
@@ -323,6 +372,26 @@ const map = new maplibregl.Map({ container:'map', style:osmStyle, center:[-1.7,5
 map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
 map.addControl(new maplibregl.ScaleControl(), 'bottom-left');
 map.on('load', () => { restoreAllLayers(); renderRoutesList(); });
+
+/* ── CHANGELOG MODAL ── */
+const CHANGELOG_VERSION = 'v2.1-multiformat';
+function showChangelogIfNeeded() {
+  const lastVersion = localStorage.getItem('trail-planner-changelog-version');
+  if (lastVersion !== CHANGELOG_VERSION) {
+    document.getElementById('changelog-modal').style.display = 'flex';
+    localStorage.setItem('trail-planner-changelog-version', CHANGELOG_VERSION);
+  }
+}
+document.getElementById('changelog-close').addEventListener('click', () => {
+  document.getElementById('changelog-modal').style.display = 'none';
+});
+document.querySelector('.modal-close').addEventListener('click', () => {
+  document.getElementById('changelog-modal').style.display = 'none';
+});
+document.getElementById('changelog-modal').addEventListener('click', e => {
+  if (e.target.id === 'changelog-modal') document.getElementById('changelog-modal').style.display = 'none';
+});
+setTimeout(showChangelogIfNeeded, 500);
 
 /* ── CLICK ── */
 map.on('click', async e => {
@@ -587,25 +656,49 @@ document.getElementById('btn-geojson').addEventListener('click',()=>{
   download('trail.geojson',JSON.stringify({type:'Feature',geometry:currentRoute},null,2),'application/json');
 });
 
+/* ── KMZ PARSER ── */
+async function parseKmz(file){
+  try {
+    const zip=await JSZip.loadAsync(file);
+    const kmlFile=zip.file(f=>f.name.endsWith('.kml'))?.[0];
+    if(!kmlFile) return null;
+    return await kmlFile.async('string');
+  } catch { return null; }
+}
+
 /* ── LOAD MULTIPLE GPX ── */
 document.getElementById('btn-upload-gpx').addEventListener('click',()=>document.getElementById('gpx-upload-input').click());
 document.getElementById('btn-topbar-load').addEventListener('click',()=>document.getElementById('gpx-upload-input').click());
 document.getElementById('btn-topbar-download').addEventListener('click',()=>document.getElementById('btn-gpx').click());
-document.getElementById('gpx-upload-input').addEventListener('change',function(){
-  const files=Array.from(this.files); if(!files.length) return;
-  let loaded=0;
-  files.forEach(file=>{
-    const reader=new FileReader();
-    reader.onload=e=>{
-      try {
-        const coords=parseGpxCoords(e.target.result);
-        if(!coords){showToast(`No track points in ${file.name}`);return;}
-        addLoadedRoute(getRouteName(e.target.result,file.name),coords); loaded++;
-        if(loaded===files.length) showToast(`Loaded ${loaded} route${loaded>1?'s':''}`);
-      } catch { showToast(`Failed to load ${file.name}`); }
-    };
-    reader.readAsText(file);
+document.getElementById('gpx-upload-input').addEventListener('change',async function(){
+  const allFiles=Array.from(this.files);
+  const supportedFiles=allFiles.filter(f=>{
+    const ext=f.name.toLowerCase().match(/\.(gpx|tcx|kml|kmz)$/i);
+    return ext;
   });
+  if(!supportedFiles.length){showToast(allFiles.length?'No supported GPS files found':'No files selected');return;}
+  let loaded=0, failed=0;
+  for(const file of supportedFiles){
+    try {
+      let text;
+      if(file.name.toLowerCase().endsWith('.kmz')){
+        text=await parseKmz(file);
+        if(!text){failed++;continue;}
+      } else {
+        text=await file.text();
+      }
+      const coords=parseCoords(text,file.name);
+      if(!coords){failed++;continue;}
+      const name=getRouteName(text,file.name);
+      addLoadedRoute(name,coords);
+      loaded++;
+    } catch(err){
+      failed++;
+    }
+  }
+  let msg=`Loaded ${loaded} route${loaded>1?'s':''}`;
+  if(failed) msg+=` (${failed} failed)`;
+  showToast(msg);
   this.value='';
 });
 
@@ -760,21 +853,63 @@ function updateArrows() {
 let loadedRoutes=[], activeRouteIdx=-1;
 const ROUTE_COLORS=['#4FC3F7','#4CAF50','#F97316','#9333EA','#EF4444','#FFDD00','#FF69B4','#00CED1'];
 
-function parseGpxCoords(text) {
+function parseCoords(text,filename) {
+  const ext=filename.toLowerCase().match(/\.(gpx|tcx|kml)$/i);
+  if(!ext) return null;
+  const type=ext[1].toLowerCase();
+  
   const xml=new DOMParser().parseFromString(text,'application/xml');
   if(xml.querySelector('parsererror')) return null;
   const coords=[];
-  xml.querySelectorAll('trkpt,rtept').forEach(pt=>{
-    const lat=parseFloat(pt.getAttribute('lat')),lng=parseFloat(pt.getAttribute('lon'));
-    const ele=pt.querySelector('ele');
-    if(!isNaN(lat)&&!isNaN(lng)) coords.push(ele?[lng,lat,parseFloat(ele.textContent)]:[lng,lat]);
-  });
+  
+  if(type==='gpx'){
+    xml.querySelectorAll('trkpt,rtept').forEach(pt=>{
+      const lat=parseFloat(pt.getAttribute('lat')),lng=parseFloat(pt.getAttribute('lon'));
+      const ele=pt.querySelector('ele');
+      if(!isNaN(lat)&&!isNaN(lng)) coords.push(ele?[lng,lat,parseFloat(ele.textContent)]:[lng,lat]);
+    });
+  } else if(type==='tcx'){
+    xml.querySelectorAll('Trackpoint').forEach(pt=>{
+      const latEl=pt.querySelector('LatitudeDegrees'),lngEl=pt.querySelector('LongitudeDegrees');
+      const lat=latEl?parseFloat(latEl.textContent):NaN,lng=lngEl?parseFloat(lngEl.textContent):NaN;
+      const eleEl=pt.querySelector('AltitudeMeters');
+      if(!isNaN(lat)&&!isNaN(lng)) coords.push(eleEl?[lng,lat,parseFloat(eleEl.textContent)]:[lng,lat]);
+    });
+  } else if(type==='kml'){
+    xml.querySelectorAll('LineString > coordinates').forEach(coordEl=>{
+      const coordStr=coordEl.textContent.trim().split(/\s+/);
+      coordStr.forEach(coord=>{
+        const [lng,lat,ele]=coord.split(',');
+        const lngNum=parseFloat(lng),latNum=parseFloat(lat),eleNum=parseFloat(ele);
+        if(!isNaN(lngNum)&&!isNaN(latNum)) coords.push(isNaN(eleNum)?[lngNum,latNum]:[lngNum,latNum,eleNum]);
+      });
+    });
+  }
+  
   return coords.length>=2?coords:null;
+}
+
+function parseGpxCoords(text) {
+  return parseCoords(text,'file.gpx');
 }
 function getRouteName(xml,filename) {
   const doc=new DOMParser().parseFromString(xml,'application/xml');
-  const n=doc.querySelector('trk > name, rte > name, gpx > name');
-  return (n&&n.textContent.trim())?n.textContent.trim():filename.replace(/\.gpx$/i,'');
+  const ext=filename.toLowerCase().match(/\.(gpx|tcx|kml)$/i);
+  const type=ext?ext[1].toLowerCase():'gpx';
+  
+  let name;
+  if(type==='tcx'){
+    const activity=doc.querySelector('Activity > Notes');
+    name=activity?activity.textContent.trim():null;
+  } else if(type==='kml'){
+    const placemark=doc.querySelector('Placemark > name');
+    name=placemark?placemark.textContent.trim():null;
+  } else {
+    const n=doc.querySelector('trk > name, rte > name, gpx > name');
+    name=n?n.textContent.trim():null;
+  }
+  
+  return name||filename.replace(/\.(gpx|tcx|kml|kmz)$/i,'');
 }
 function computeArrowFeatures(coords) {
   if(!coords||coords.length<2) return [];
