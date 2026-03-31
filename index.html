@@ -359,7 +359,8 @@ const HIKING_KMH = 4;
 
 let points = [], segments = [], undoStack = [], redoStack = [];
 let currentRoute = null, usedFallback = false;
-let mapStyleIdx = 0, useRouting = true, useMetric = true, terrainOn = false, lastStats = null;
+let mapStyleIdx = 0, useRouting = true, useMetric = true, terrainOn = false, lastStats = null, userLocationCircle = null;
+let userLocationCircle = null;
 
 /* ── MAP STYLES ── */
 const osmStyle  = { version:8, sources:{ osm:{ type:'raster', tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize:256, attribution:'© OpenStreetMap contributors' } }, layers:[{ id:'osm-tiles', type:'raster', source:'osm' }] };
@@ -733,12 +734,20 @@ document.getElementById('btn-routing').addEventListener('click',function(){
   // Don't re-route existing segments — new segments use new mode
 });
 
-/* ── LOCATE ── */
-document.getElementById('btn-locate').addEventListener('click',()=>{
-  if(!navigator.geolocation){showToast('Geolocation not supported');return;}
+document.getElementById("btn-locate").addEventListener("click",()=>{
+  if(!navigator.geolocation){showToast("Geolocation not supported");return;}
   navigator.geolocation.getCurrentPosition(
-    pos=>map.flyTo({center:[pos.coords.longitude,pos.coords.latitude],zoom:14}),
-    ()=>showToast('Could not get location')
+    pos=>{
+      const coords=[pos.coords.longitude,pos.coords.latitude];
+      const accuracy=pos.coords.accuracy;
+      if(userLocationCircle){map.removeLayer(userLocationCircle.id);map.removeSource(userLocationCircle.id);}
+      const circleId="user-location-"+Date.now();
+      map.addSource(circleId,{type:"geojson",data:{type:"Feature",geometry:{type:"Point",coordinates:coords}}});
+      map.addLayer({id:circleId,type:"circle",source:circleId,paint:{"circle-radius":["interpolate",["linear"],["zoom"],0,0,20,accuracy/2],"circle-color":"#4285F4","circle-opacity":0.3,"circle-stroke-width":2,"circle-stroke-color":"#4285F4"}});
+      userLocationCircle={id:circleId};
+      map.flyTo({center:coords,zoom:16});
+    },
+    ()=>showToast("Could not get location")
   );
 });
 
