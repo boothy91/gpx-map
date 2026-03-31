@@ -360,7 +360,6 @@ const HIKING_KMH = 4;
 let points = [], segments = [], undoStack = [], redoStack = [];
 let currentRoute = null, usedFallback = false;
 let mapStyleIdx = 0, useRouting = true, useMetric = true, terrainOn = false, lastStats = null, userLocationCircle = null;
-let userLocationCircle = null;
 
 /* ── MAP STYLES ── */
 const osmStyle  = { version:8, sources:{ osm:{ type:'raster', tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize:256, attribution:'© OpenStreetMap contributors' } }, layers:[{ id:'osm-tiles', type:'raster', source:'osm' }] };
