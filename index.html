@@ -331,18 +331,13 @@
     </div>
     <div class="modal-body">
       <div class="changelog-item">
-        <h3>📂 Multi-Format Import</h3>
-        <p>Import multiple GPS files at once! Now supports:</p>
+        <h3>🎯 Waypoint Snap</h3>
+        <p>With <strong>Route On</strong> enabled, newly placed waypoint dots now snap to the routed trail or road result instead of staying where your finger lands.</p>
         <ul>
-          <li><strong>GPX</strong> - Standard GPS format</li>
-          <li><strong>TCX</strong> - Garmin fitness files</li>
-          <li><strong>KML</strong> - Google Earth format</li>
-          <li><strong>KMZ</strong> - Compressed KML files</li>
+          <li><strong>More accurate taps</strong> - dots follow the same snapped route logic as the line</li>
+          <li><strong>Cleaner planning</strong> - waypoints sit on the path instead of slightly beside it</li>
+          <li><strong>Works while routing</strong> - best for hiking, walking, cycling, and road modes</li>
         </ul>
-      </div>
-      <div class="changelog-item">
-        <h3>🗂️ Batch Loading</h3>
-        <p>Select a whole folder or multiple individual files to load them all at once. Perfect for importing your entire GPS activity library!</p>
       </div>
     </div>
     <div class="modal-footer">
@@ -374,7 +369,8 @@ map.addControl(new maplibregl.ScaleControl(), 'bottom-left');
 map.on('load', () => { restoreAllLayers(); renderRoutesList(); });
 
 /* ── CHANGELOG MODAL ── */
-const CHANGELOG_VERSION = 'v2.1-multiformat';
+const CHANGELOG_VERSION = 'v2.2-waypoint-snap';
+const PATH_SNAP_TOLERANCE_PX = 18;
 function showChangelogIfNeeded() {
   const lastVersion = localStorage.getItem('trail-planner-changelog-version');
   if (lastVersion !== CHANGELOG_VERSION) {
@@ -395,31 +391,121 @@ setTimeout(showChangelogIfNeeded, 500);
 
 /* ── CLICK ── */
 map.on('click', async e => {
-  const newPoint = { lat:e.lngLat.lat, lng:e.lngLat.lng };
+  const rawTapPoint = { lat:e.lngLat.lat, lng:e.lngLat.lng };
+  const previousPoint = points[points.length - 1];
+  let newPoint = findSnapPointForTap(e.point) || rawTapPoint;
+  let routedSegment = null;
+
+  if (useRouting && previousPoint) {
+    const routedResult = await routeSegment(previousPoint, rawTapPoint);
+    if (routedResult?.coords?.length >= 2) {
+      routedSegment = { coords: routedResult.coords, routed: true };
+      newPoint = routedResult.snappedPoint;
+    }
+  }
+
   const newPts = [...points, newPoint];
   undoStack.push({ points: JSON.parse(JSON.stringify(points)), segments: JSON.parse(JSON.stringify(segments)) });
   redoStack = [];
   points = newPts;
   updateMarkers(); updateWaypointList(); updateButtons();
+
   if (newPts.length >= 2) {
-    const from = newPts[newPts.length-2], to = newPts[newPts.length-1];
-    if (useRouting) await doLastSegment(from, to);
-    else addStraightSegment(from, to);
+    if (routedSegment) {
+      segments.push(routedSegment);
+      rebuildRoute();
+      updateButtons();
+    } else {
+      const from = newPts[newPts.length-2], to = newPts[newPts.length-1];
+      if (useRouting) await doLastSegment(from, to);
+      else addStraightSegment(from, to);
+    }
   }
 });
 
+function findSnapPointForTap(point) {
+  const candidates = [];
+  if (currentRoute?.coordinates?.length >= 2) candidates.push(currentRoute.coordinates);
+  loadedRoutes.forEach(route => {
+    if (route.coords?.length >= 2) candidates.push(route.coords);
+  });
+
+  let best = null;
+  candidates.forEach(coords => {
+    for (let i = 1; i < coords.length; i++) {
+      const candidate = projectPointOntoSegment(point, coords[i - 1], coords[i]);
+      if (!candidate || candidate.distancePx > PATH_SNAP_TOLERANCE_PX) continue;
+      if (!best || candidate.distancePx < best.distancePx) best = candidate;
+    }
+  });
+
+  return best ? best.point : null;
+}
+
+function projectPointOntoSegment(tapPoint, startCoord, endCoord) {
+  const a = map.project([startCoord[0], startCoord[1]]);
+  const b = map.project([endCoord[0], endCoord[1]]);
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const abLenSq = abx * abx + aby * aby;
+  if (!abLenSq) return null;
+
+  const apx = tapPoint.x - a.x;
+  const apy = tapPoint.y - a.y;
+  const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / abLenSq));
+  const projX = a.x + abx * t;
+  const projY = a.y + aby * t;
+  const dx = tapPoint.x - projX;
+  const dy = tapPoint.y - projY;
+
+  return {
+    distancePx: Math.sqrt(dx * dx + dy * dy),
+    point: interpolateRoutePoint(startCoord, endCoord, t)
+  };
+}
+
+function interpolateRoutePoint(startCoord, endCoord, t) {
+  const point = {
+    lng: startCoord[0] + (endCoord[0] - startCoord[0]) * t,
+    lat: startCoord[1] + (endCoord[1] - startCoord[1]) * t
+  };
+
+  if (startCoord.length >= 3 && endCoord.length >= 3) {
+    point.ele = startCoord[2] + (endCoord[2] - startCoord[2]) * t;
+  }
+
+  return point;
+}
+
+function coordToPoint(coord) {
+  const point = { lng: coord[0], lat: coord[1] };
+  if (coord.length >= 3) point.ele = coord[2];
+  return point;
+}
+
 /* ── ROUTING ── */
-async function doLastSegment(from, to) {
+async function routeSegment(from, to) {
   const profile = document.getElementById('profile-select')?.value || 'foot-hiking';
+  const res = await fetch(`https://api.openrouteservice.org/v2/directions/${profile}/geojson`, {
+    method:'POST',
+    headers:{ 'Authorization':`Bearer ${ORS_KEY}`, 'Content-Type':'application/json' },
+    body: JSON.stringify({ coordinates:[[from.lng,from.lat],[to.lng,to.lat]], elevation:true })
+  });
+  if (!res.ok) return null;
+  const geo = await res.json();
+  const coords = geo.features?.[0]?.geometry?.coordinates;
+  if (!coords || coords.length < 2) return null;
+  return {
+    coords,
+    snappedPoint: coordToPoint(coords[coords.length - 1])
+  };
+}
+
+async function doLastSegment(from, to) {
   try {
-    const res = await fetch(`https://api.openrouteservice.org/v2/directions/${profile}/geojson`, {
-      method:'POST',
-      headers:{ 'Authorization':`Bearer ${ORS_KEY}`, 'Content-Type':'application/json' },
-      body: JSON.stringify({ coordinates:[[from.lng,from.lat],[to.lng,to.lat]], elevation:true })
-    });
-    if (!res.ok) { addStraightSegment(from, to); return; }
-    const geo = await res.json();
-    segments.push({ coords: geo.features[0].geometry.coordinates, routed: true });
+    const routedResult = await routeSegment(from, to);
+    if (!routedResult) { addStraightSegment(from, to); return; }
+    segments.push({ coords: routedResult.coords, routed: true });
     rebuildRoute();
   } catch { addStraightSegment(from, to); }
   updateButtons();
