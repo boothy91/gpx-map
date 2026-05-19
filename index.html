@@ -355,6 +355,7 @@ const HIKING_KMH = 4;
 let points = [], segments = [], undoStack = [], redoStack = [];
 let currentRoute = null, usedFallback = false;
 let mapStyleIdx = 0, useRouting = true, useMetric = true, terrainOn = false, lastStats = null, userLocationCircle = null;
+let pois = [];
 
 /* ── MAP STYLES ── */
 const osmStyle  = { version:8, sources:{ osm:{ type:'raster', tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize:256, attribution:'© OpenStreetMap contributors' } }, layers:[{ id:'osm-tiles', type:'raster', source:'osm' }] };
@@ -390,6 +391,32 @@ document.getElementById('changelog-modal').addEventListener('click', e => {
 setTimeout(showChangelogIfNeeded, 500);
 
 /* ── CLICK ── */
+let longPressTimer = null;
+map.on('mousedown', e => {
+  longPressTimer = setTimeout(() => {
+    longPressTimer = null;
+    const name = prompt('POI name (leave blank to cancel):');
+    if (!name || !name.trim()) return;
+    pois.push({ lat: e.lngLat.lat, lng: e.lngLat.lng, name: name.trim() });
+    updatePoiMarkers();
+  }, 600);
+});
+map.on('mouseup', () => { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } });
+map.on('mousemove', () => { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } });
+map.on('touchstart', e => {
+  if (e.originalEvent.touches.length !== 1) return;
+  const touch = e.lngLat;
+  longPressTimer = setTimeout(() => {
+    longPressTimer = null;
+    const name = prompt('POI name (leave blank to cancel):');
+    if (!name || !name.trim()) return;
+    pois.push({ lat: touch.lat, lng: touch.lng, name: name.trim() });
+    updatePoiMarkers();
+  }, 600);
+});
+map.on('touchend', () => { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } });
+map.on('touchmove', () => { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } });
+
 map.on('click', async e => {
   const rawTapPoint = { lat:e.lngLat.lat, lng:e.lngLat.lng };
   const previousPoint = points[points.length - 1];
@@ -563,6 +590,34 @@ function fallbackRoute(pts) {
 }
 
 /* ── MARKERS ── */
+let poiMarkerElements = [];
+function updatePoiMarkers() {
+  poiMarkerElements.forEach(m => m.remove());
+  poiMarkerElements = [];
+  pois.forEach((poi, i) => {
+    const el = document.createElement('div');
+    el.style.cssText = 'display:flex;flex-direction:column;align-items:center;cursor:pointer;';
+    const dot = document.createElement('div');
+    dot.style.cssText = 'width:14px;height:14px;border-radius:50%;background:#FF9800;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.5);';
+    const label = document.createElement('div');
+    label.style.cssText = 'margin-top:2px;background:rgba(13,15,30,0.85);color:#FF9800;font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis;';
+    label.textContent = poi.name;
+    el.appendChild(dot);
+    el.appendChild(label);
+    el.addEventListener('click', ev => {
+      ev.stopPropagation();
+      if (confirm('Remove POI "' + poi.name + '"?')) {
+        pois.splice(i, 1);
+        updatePoiMarkers();
+      }
+    });
+    const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+      .setLngLat([poi.lng, poi.lat])
+      .addTo(map);
+    poiMarkerElements.push(marker);
+  });
+}
+
 function updateMarkers() {
   if (!map.getSource('markers')) return;
   map.getSource('markers').setData({ type:'FeatureCollection', features:points.map((p,i) => ({
@@ -735,7 +790,8 @@ document.getElementById('btn-gpx').addEventListener('click',()=>{
       <time>${times[i].toISOString()}</time>
     </trkpt>`).join('\n');
 
-  download('trail.gpx',`<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Trail Planner">\n  <trk><name>My Trail</name><trkseg>\n${trkpts}\n  </trkseg></trk>\n</gpx>`,'application/gpx+xml');
+  const wptXml = pois.map(p => `  <wpt lat="${p.lat.toFixed(7)}" lon="${p.lng.toFixed(7)}">\n    <name>${p.name}</name>\n  </wpt>`).join('\n');
+  download('trail.gpx',`<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Trail Planner">\n${wptXml ? wptXml + '\n' : ''}  <trk><name>My Trail</name><trkseg>\n${trkpts}\n  </trkseg></trk>\n</gpx>`,'application/gpx+xml');
 });
 document.getElementById('btn-geojson').addEventListener('click',()=>{
   if(!currentRoute) return;
