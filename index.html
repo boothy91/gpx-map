@@ -361,7 +361,7 @@ const osmStyle  = { version:8, sources:{ osm:{ type:'raster', tiles:['https://ti
 const topoStyle = { version:8, sources:{ topo:{ type:'raster', tiles:['https://tile.opentopomap.org/{z}/{x}/{y}.png'], tileSize:256, attribution:'© OpenTopoMap contributors' } }, layers:[{ id:'topo-tiles', type:'raster', source:'topo' }] };
 const satStyle  = { version:8, sources:{ sat:{ type:'raster', tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize:256, attribution:'© Esri' } }, layers:[{ id:'sat-tiles', type:'raster', source:'sat' }] };
 const MAP_STYLES = [osmStyle, topoStyle, satStyle];
-const MAP_STYLE_LABELS = ['Topo', 'Satellite', 'OSM'];
+const MAP_STYLE_LABELS = ['OSM', 'Topo', 'Satellite'];
 
 const map = new maplibregl.Map({ container:'map', style:osmStyle, center:[-1.7,53.4], zoom:11 });
 map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
