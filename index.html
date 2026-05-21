@@ -322,6 +322,22 @@
 
 <div id="toast"></div>
 
+<div id="poi-modal" class="modal" style="display:none;">
+  <div class="modal-overlay"></div>
+  <div class="modal-content" style="max-width:300px;">
+    <div class="modal-header">
+      <h2 style="font-size:14px;">Add a name</h2>
+    </div>
+    <div class="modal-body" style="padding:14px;">
+      <input id="poi-name-input" type="text" placeholder="e.g. Viewpoint" style="width:100%;padding:9px 10px;background:var(--card2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:inherit;font-size:13px;outline:none;" />
+    </div>
+    <div class="modal-footer" style="padding:10px 14px;">
+      <button id="poi-cancel" class="top-btn" style="flex:1;justify-content:center;">Cancel</button>
+      <button id="poi-confirm" class="top-btn" style="flex:1;justify-content:center;color:#FF9800;border-color:#FF9800;">Add</button>
+    </div>
+  </div>
+</div>
+
 <div id="changelog-modal" class="modal" style="display:none;">
   <div class="modal-overlay"></div>
   <div class="modal-content">
@@ -391,14 +407,37 @@ document.getElementById('changelog-modal').addEventListener('click', e => {
 setTimeout(showChangelogIfNeeded, 500);
 
 /* ── CLICK ── */
+let poiModalCallback = null;
+function showPoiModal(callback) {
+  poiModalCallback = callback;
+  const modal = document.getElementById('poi-modal');
+  const input = document.getElementById('poi-name-input');
+  input.value = '';
+  modal.style.display = 'flex';
+  setTimeout(() => input.focus(), 100);
+}
+document.getElementById('poi-confirm').addEventListener('click', () => {
+  const name = document.getElementById('poi-name-input').value.trim();
+  document.getElementById('poi-modal').style.display = 'none';
+  if (name && poiModalCallback) poiModalCallback(name);
+});
+document.getElementById('poi-cancel').addEventListener('click', () => {
+  document.getElementById('poi-modal').style.display = 'none';
+});
+document.getElementById('poi-name-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('poi-confirm').click();
+  if (e.key === 'Escape') document.getElementById('poi-cancel').click();
+});
+
 let longPressTimer = null;
 map.on('mousedown', e => {
+  const captureLngLat = e.lngLat;
   longPressTimer = setTimeout(() => {
     longPressTimer = null;
-    const name = prompt('POI name (leave blank to cancel):');
-    if (!name || !name.trim()) return;
-    pois.push({ lat: e.lngLat.lat, lng: e.lngLat.lng, name: name.trim() });
-    updatePoiMarkers();
+    showPoiModal(name => {
+      pois.push({ lat: captureLngLat.lat, lng: captureLngLat.lng, name });
+      updatePoiMarkers();
+    });
   }, 600);
 });
 map.on('mouseup', () => { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } });
@@ -408,10 +447,10 @@ map.on('touchstart', e => {
   const touch = e.lngLat;
   longPressTimer = setTimeout(() => {
     longPressTimer = null;
-    const name = prompt('POI name (leave blank to cancel):');
-    if (!name || !name.trim()) return;
-    pois.push({ lat: touch.lat, lng: touch.lng, name: name.trim() });
-    updatePoiMarkers();
+    showPoiModal(name => {
+      pois.push({ lat: touch.lat, lng: touch.lng, name });
+      updatePoiMarkers();
+    });
   }, 600);
 });
 map.on('touchend', () => { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } });
@@ -843,6 +882,28 @@ document.getElementById('gpx-upload-input').addEventListener('change',async func
   showToast(msg);
   this.value='';
 });
+
+window.loadGpxFromAndroidB64 = function(b64, name) {
+  try {
+    const gpxText = atob(b64);
+    loadGpxFromAndroid(gpxText, name);
+  } catch(e) {
+    showToast('Failed to decode route');
+  }
+};
+
+window.loadGpxFromAndroid = function(gpxText, name) {
+  try {
+    const safeName = (name || 'route') + '.gpx';
+    const coords = parseCoords(gpxText, safeName);
+    if (!coords) { showToast('Could not parse route'); return; }
+    const routeName = getRouteName(gpxText, safeName);
+    addLoadedRoute(routeName, coords);
+    showToast('Route loaded: ' + routeName);
+  } catch(e) {
+    showToast('Failed to load route');
+  }
+};
 
 function download(filename,text,mime) {
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type:mime})); a.download=filename; a.click();
