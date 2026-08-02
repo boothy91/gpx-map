@@ -284,7 +284,8 @@
       <!-- Round Trip -->
       <div class="sec-label">Round Trip Loop</div>
       <div class="row" style="margin-bottom:5px;">
-        <input type="number" id="roundtrip-distance" placeholder="Distance (km)" min="0.5" step="0.5" style="flex:1;padding:9px 10px;background:var(--card2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:inherit;font-size:13px;outline:none;" />
+        <input type="number" id="roundtrip-distance" placeholder="Distance" min="0.5" step="0.5" style="flex:1;padding:9px 10px;background:var(--card2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:inherit;font-size:13px;outline:none;" />
+        <span id="roundtrip-unit-label" style="align-self:center;font-size:11px;color:var(--text-sec);min-width:22px;">km</span>
         <button class="top-btn" id="btn-roundtrip" style="justify-content:center;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg>
           Loop
@@ -584,7 +585,7 @@ async function generateRoundTrip(start, lengthMetres, seed) {
     headers:{ 'Authorization':`Bearer ${ORS_KEY}`, 'Content-Type':'application/json' },
     body: JSON.stringify({
       coordinates:[[start.lng,start.lat]],
-      options:{ round_trip:{ length:lengthMetres, points:5, seed: seed || Math.floor(Math.random()*10000) } },
+      options:{ round_trip:{ length:lengthMetres, points:8, seed: seed || Math.floor(Math.random()*10000) } },
       elevation:true
     })
   });
@@ -798,22 +799,42 @@ function setUnit(metric) {
   useMetric=metric;
   document.getElementById('unit-km').classList.toggle('active',metric);
   document.getElementById('unit-mi').classList.toggle('active',!metric);
+  const rtLabel = document.getElementById('roundtrip-unit-label');
+  if (rtLabel) rtLabel.textContent = metric ? 'km' : 'mi';
   if(lastStats) updateStats(lastStats);
 }
 document.getElementById('unit-km').addEventListener('click',()=>setUnit(true));
 document.getElementById('unit-mi').addEventListener('click',()=>setUnit(false));
 document.getElementById('top-dist').addEventListener('click',()=>setUnit(!useMetric));
+function roundTripCoordsLengthMetres(coords) {
+  let m = 0;
+  for (let i = 1; i < coords.length; i++) {
+    m += haversine({ lat: coords[i-1][1], lng: coords[i-1][0] }, { lat: coords[i][1], lng: coords[i][0] }) * 1000;
+  }
+  return m;
+}
+
 document.getElementById('btn-roundtrip').addEventListener('click', async () => {
-  const km = parseFloat(document.getElementById('roundtrip-distance').value);
-  if (!km || km <= 0) { showToast('Enter a distance in km'); return; }
+  const val = parseFloat(document.getElementById('roundtrip-distance').value);
+  if (!val || val <= 0) { showToast(`Enter a distance in ${useMetric ? 'km' : 'mi'}`); return; }
+  const targetMetres = useMetric ? val * 1000 : val * 1609.34;
   const center = map.getCenter();
   showToast('Generating loop...');
-  const coords = await generateRoundTrip({ lat: center.lat, lng: center.lng }, km * 1000);
-  if (!coords) { showToast('Could not generate loop'); return; }
-  segments = [{ coords, routed: true }];
+  let best = null, bestDiff = Infinity;
+  for (let i = 0; i < 3; i++) {
+    const coords = await generateRoundTrip({ lat: center.lat, lng: center.lng }, targetMetres);
+    if (!coords) continue;
+    const diff = Math.abs(roundTripCoordsLengthMetres(coords) - targetMetres);
+    if (diff < bestDiff) { bestDiff = diff; best = coords; }
+  }
+  if (!best) { showToast('Could not generate loop'); return; }
+  segments = [{ coords: best, routed: true }];
   rebuildRoute();
-  applyPoints([{ lat: coords[0][1], lng: coords[0][0] }], true);
+  applyPoints([{ lat: best[0][1], lng: best[0][0] }], true);
   updateButtons();
+  const actualMetres = roundTripCoordsLengthMetres(best);
+  const actualDisp = useMetric ? `${(actualMetres/1000).toFixed(2)}km` : `${(actualMetres/1609.34).toFixed(2)}mi`;
+  showToast(`Loop generated: ${actualDisp}`);
 });
 
 document.getElementById('profile-select').addEventListener('change',()=>{
