@@ -211,6 +211,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M12 5l7 7-7 7"/></svg>
       <span id="btn-routing-label">Route On</span>
     </button>
+    <button class="top-btn" id="btn-loop-topbar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg>
+      Loop
+    </button>
     <button class="top-btn" id="btn-terrain">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20l5-10 4 6 3-4 6 8H3z"/></svg>
       <span id="btn-terrain-label">3D</span>
@@ -814,8 +818,7 @@ function roundTripCoordsLengthMetres(coords) {
   return m;
 }
 
-document.getElementById('btn-roundtrip').addEventListener('click', async () => {
-  const val = parseFloat(document.getElementById('roundtrip-distance').value);
+async function runRoundTripGeneration(val) {
   if (!val || val <= 0) { showToast(`Enter a distance in ${useMetric ? 'km' : 'mi'}`); return; }
   const targetMetres = useMetric ? val * 1000 : val * 1609.34;
   const center = map.getCenter();
@@ -835,6 +838,17 @@ document.getElementById('btn-roundtrip').addEventListener('click', async () => {
   const actualMetres = roundTripCoordsLengthMetres(best);
   const actualDisp = useMetric ? `${(actualMetres/1000).toFixed(2)}km` : `${(actualMetres/1609.34).toFixed(2)}mi`;
   showToast(`Loop generated: ${actualDisp}`);
+}
+
+document.getElementById('btn-roundtrip').addEventListener('click', () => {
+  const val = parseFloat(document.getElementById('roundtrip-distance').value);
+  runRoundTripGeneration(val);
+});
+
+document.getElementById('btn-loop-topbar').addEventListener('click', () => {
+  const input = window.prompt(`Loop distance (${useMetric ? 'km' : 'mi'}):`);
+  if (input === null) return;
+  runRoundTripGeneration(parseFloat(input));
 });
 
 document.getElementById('profile-select').addEventListener('change',()=>{
