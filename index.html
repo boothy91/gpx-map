@@ -281,6 +281,16 @@
         </select>
       </div>
 
+      <!-- Round Trip -->
+      <div class="sec-label">Round Trip Loop</div>
+      <div class="row" style="margin-bottom:5px;">
+        <input type="number" id="roundtrip-distance" placeholder="Distance (km)" min="0.5" step="0.5" style="flex:1;padding:9px 10px;background:var(--card2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:inherit;font-size:13px;outline:none;" />
+        <button class="top-btn" id="btn-roundtrip" style="justify-content:center;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg>
+          Loop
+        </button>
+      </div>
+
       <!-- Import / Export -->
       <div class="sec-label">Import / Export</div>
       <div class="row" style="margin-bottom:5px;">
@@ -567,6 +577,24 @@ async function routeSegment(from, to) {
   };
 }
 
+async function generateRoundTrip(start, lengthMetres, seed) {
+  const profile = document.getElementById('profile-select')?.value || 'foot-hiking';
+  const res = await fetch(`https://api.openrouteservice.org/v2/directions/${profile}/geojson`, {
+    method:'POST',
+    headers:{ 'Authorization':`Bearer ${ORS_KEY}`, 'Content-Type':'application/json' },
+    body: JSON.stringify({
+      coordinates:[[start.lng,start.lat]],
+      options:{ round_trip:{ length:lengthMetres, points:5, seed: seed || Math.floor(Math.random()*10000) } },
+      elevation:true
+    })
+  });
+  if (!res.ok) return null;
+  const geo = await res.json();
+  const coords = geo.features?.[0]?.geometry?.coordinates;
+  if (!coords || coords.length < 2) return null;
+  return coords;
+}
+
 async function doLastSegment(from, to) {
   try {
     const routedResult = await routeSegment(from, to);
@@ -775,6 +803,19 @@ function setUnit(metric) {
 document.getElementById('unit-km').addEventListener('click',()=>setUnit(true));
 document.getElementById('unit-mi').addEventListener('click',()=>setUnit(false));
 document.getElementById('top-dist').addEventListener('click',()=>setUnit(!useMetric));
+document.getElementById('btn-roundtrip').addEventListener('click', async () => {
+  const km = parseFloat(document.getElementById('roundtrip-distance').value);
+  if (!km || km <= 0) { showToast('Enter a distance in km'); return; }
+  const center = map.getCenter();
+  showToast('Generating loop...');
+  const coords = await generateRoundTrip({ lat: center.lat, lng: center.lng }, km * 1000);
+  if (!coords) { showToast('Could not generate loop'); return; }
+  segments = [{ coords, routed: true }];
+  rebuildRoute();
+  applyPoints([{ lat: coords[0][1], lng: coords[0][0] }], true);
+  updateButtons();
+});
+
 document.getElementById('profile-select').addEventListener('change',()=>{
   if(points.length>=2) rerouteAll();
 });
