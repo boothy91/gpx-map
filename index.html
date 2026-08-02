@@ -362,12 +362,12 @@
     </div>
     <div class="modal-body">
       <div class="changelog-item">
-        <h3>🎯 Waypoint Snap</h3>
-        <p>With <strong>Route On</strong> enabled, newly placed waypoint dots now snap to the routed trail or road result instead of staying where your finger lands.</p>
+        <h3>🔄 Round Trip Loop</h3>
+        <p>Generate a circular route from your current map position instead of drawing one by hand.</p>
         <ul>
-          <li><strong>More accurate taps</strong> - dots follow the same snapped route logic as the line</li>
-          <li><strong>Cleaner planning</strong> - waypoints sit on the path instead of slightly beside it</li>
-          <li><strong>Works while routing</strong> - best for hiking, walking, cycling, and road modes</li>
+          <li><strong>Set a target distance</strong> - in the drawer, or tap the top-bar Loop button for a quick prompt</li>
+          <li><strong>Closest-match generation</strong> - picks the best of several candidate loops to match your target length</li>
+          <li><strong>Respects km/mi</strong> - uses whichever unit you have selected</li>
         </ul>
       </div>
     </div>
@@ -401,7 +401,7 @@ map.addControl(new maplibregl.ScaleControl(), 'bottom-left');
 map.on('load', () => { restoreAllLayers(); renderRoutesList(); });
 
 /* ── CHANGELOG MODAL ── */
-const CHANGELOG_VERSION = 'v2.2-waypoint-snap';
+const CHANGELOG_VERSION = 'v2.3-round-trip-loop';
 const PATH_SNAP_TOLERANCE_PX = 18;
 function showChangelogIfNeeded() {
   const lastVersion = localStorage.getItem('trail-planner-changelog-version');
