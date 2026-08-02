@@ -844,7 +844,7 @@ async function runRoundTripGeneration(val) {
   if (!best) { showToast('Could not generate loop'); return; }
   segments = [{ coords: best, routed: true }];
   rebuildRoute();
-  applyPoints([{ lat: best[0][1], lng: best[0][0] }], true);
+  applyPoints([{ lat: best[0][1], lng: best[0][0] }, { lat: best[best.length-1][1], lng: best[best.length-1][0] }], true);
   updateButtons();
   const actualMetres = roundTripCoordsLengthMetres(best);
   const actualDisp = useMetric ? `${(actualMetres/1000).toFixed(2)}km` : `${(actualMetres/1609.34).toFixed(2)}mi`;
