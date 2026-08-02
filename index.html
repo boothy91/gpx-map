@@ -829,26 +829,46 @@ function roundTripCoordsLengthMetres(coords) {
   return m;
 }
 
+function getRoundTripBiasKey(profile) { return `roundtrip-bias-${profile}`; }
+function getRoundTripBias(profile) {
+  const v = parseFloat(localStorage.getItem(getRoundTripBiasKey(profile)));
+  return (!isNaN(v) && v > 0) ? v : 1;
+}
+function saveRoundTripBias(profile, bias) {
+  localStorage.setItem(getRoundTripBiasKey(profile), Math.max(0.3, Math.min(3, bias)).toFixed(3));
+}
+
 async function runRoundTripGeneration(val) {
   if (!val || val <= 0) { showToast(`Enter a distance in ${useMetric ? 'km' : 'mi'}`); return; }
   const targetMetres = useMetric ? val * 1000 : val * 1609.34;
   const center = map.getCenter();
+  const profile = document.getElementById('profile-select')?.value || 'foot-hiking';
   showToast('Generating loop...');
-  let best = null, bestDiff = Infinity;
-  for (let i = 0; i < 3; i++) {
-    const coords = await generateRoundTrip({ lat: center.lat, lng: center.lng }, targetMetres);
+  const seed = Math.floor(Math.random() * 10000);
+  let best = null, bestDiff = Infinity, bestActual = 0;
+  let requestMetres = targetMetres * getRoundTripBias(profile);
+  for (let i = 0; i < 5; i++) {
+    const coords = await generateRoundTrip({ lat: center.lat, lng: center.lng }, requestMetres, seed);
     if (!coords) continue;
-    const diff = Math.abs(roundTripCoordsLengthMetres(coords) - targetMetres);
-    if (diff < bestDiff) { bestDiff = diff; best = coords; }
+    const actualMetres = roundTripCoordsLengthMetres(coords);
+    const diff = Math.abs(actualMetres - targetMetres);
+    if (diff < bestDiff) { bestDiff = diff; best = coords; bestActual = actualMetres; }
+    if (diff / targetMetres < 0.03) break;
+    if (actualMetres > 0) {
+      const ratio = targetMetres / actualMetres;
+      requestMetres = requestMetres * Math.max(0.3, Math.min(3, ratio));
+    }
   }
   if (!best) { showToast('Could not generate loop'); return; }
+  saveRoundTripBias(profile, requestMetres / targetMetres);
   segments = [{ coords: best, routed: true }];
   rebuildRoute();
   applyPoints([{ lat: best[0][1], lng: best[0][0] }, { lat: best[best.length-1][1], lng: best[best.length-1][0] }], true);
   updateButtons();
-  const actualMetres = roundTripCoordsLengthMetres(best);
-  const actualDisp = useMetric ? `${(actualMetres/1000).toFixed(2)}km` : `${(actualMetres/1609.34).toFixed(2)}mi`;
-  showToast(`Loop generated: ${actualDisp}`);
+  const actualDisp = useMetric ? `${(bestActual/1000).toFixed(2)}km` : `${(bestActual/1609.34).toFixed(2)}mi`;
+  const pctDiff = (bestActual - targetMetres) / targetMetres * 100;
+  const pctStr = (pctDiff >= 0 ? '+' : '') + pctDiff.toFixed(0) + '%';
+  showToast(`Loop generated: ${actualDisp} (target ${val}${useMetric ? 'km' : 'mi'}, ${pctStr})`);
 }
 
 document.getElementById('btn-roundtrip').addEventListener('click', () => {
