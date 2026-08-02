@@ -1081,7 +1081,7 @@ function restoreAllLayers() {
   loadedRoutes.forEach(r=>{
     if(!map.getSource(r.sourceId)) {
       map.addSource(r.sourceId,{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:r.coords}}});
-      map.addLayer({id:r.layerId,type:'line',source:r.sourceId,paint:{'line-width':3,'line-color':r.color,'line-opacity':0.85}});
+      map.addLayer({id:r.layerId,type:'line',source:r.sourceId,layout:{'line-join':'round','line-cap':'round'},paint:{'line-width':3,'line-color':r.color,'line-opacity':0.85}});
     }
     if(r.arrowSourceId&&!map.getSource(r.arrowSourceId)) {
       addColoredArrowImage(r.color, r.arrowImageId);
@@ -1091,8 +1091,8 @@ function restoreAllLayers() {
     }
   });
   map.addSource('route',{type:'geojson',data:currentRoute?{type:'Feature',geometry:currentRoute}:emptyFeature()});
-  map.addLayer({id:'route-outline',type:'line',source:'route',paint:{'line-width':8,'line-color':'#000000','line-opacity':0.35}});
-  map.addLayer({id:'route-line',   type:'line',source:'route',paint:{'line-width':4,'line-color':'#4FC3F7'}});
+  map.addLayer({id:'route-outline',type:'line',source:'route',layout:{'line-join':'round','line-cap':'round'},paint:{'line-width':8,'line-color':'#000000','line-opacity':0.35}});
+  map.addLayer({id:'route-line',   type:'line',source:'route',layout:{'line-join':'round','line-cap':'round'},paint:{'line-width':4,'line-color':'#4FC3F7'}});
   map.addSource('route-arrow-points',{type:'geojson',data:emptyFC()});
   map.addLayer({id:'route-arrows',type:'symbol',source:'route-arrow-points',layout:{'icon-image':'arrow','icon-size':0.85,'icon-rotation-alignment':'map','icon-allow-overlap':true,'icon-ignore-placement':true,'icon-rotate':['get','bearing']}});
   map.addSource('markers',{type:'geojson',data:emptyFC()});
@@ -1210,7 +1210,7 @@ function addLoadedRoute(name,coords) {
   const arrowSourceId=`loaded-route-arrows-src-${idx}`, arrowLayerId=`loaded-route-arrows-${idx}`;
   const arrowImageId=`arrow-${color.replace('#','')}`;
   map.addSource(sourceId,{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:coords}}});
-  map.addLayer({id:layerId,type:'line',source:sourceId,paint:{'line-width':3,'line-color':color,'line-opacity':0.85}});
+  map.addLayer({id:layerId,type:'line',source:sourceId,layout:{'line-join':'round','line-cap':'round'},paint:{'line-width':3,'line-color':color,'line-opacity':0.85}});
   addColoredArrowImage(color, arrowImageId);
   const arrowFeatures=computeArrowFeatures(coords);
   map.addSource(arrowSourceId,{type:'geojson',data:{type:'FeatureCollection',features:arrowFeatures}});
