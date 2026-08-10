@@ -578,7 +578,7 @@ function coordToPoint(coord) {
 /* ── ROUTING ── */
 async function routeSegment(from, to) {
   const profile = document.getElementById('profile-select')?.value || 'foot-hiking';
-  const res = await fetch(`https://api.heigit.org/openrouteservice/v2/directions/${profile}/geojson`, {
+  const res = await fetch(`https://router.project-osrm.org/route/v1/foot/`, {
     method:'POST',
     headers:{ 'Authorization':`Bearer ${ORS_KEY}`, 'Content-Type':'application/json' },
     body: JSON.stringify({ coordinates:[[from.lng,from.lat],[to.lng,to.lat]], elevation:true })
@@ -595,7 +595,7 @@ async function routeSegment(from, to) {
 
 async function generateRoundTrip(start, lengthMetres, seed) {
   const profile = document.getElementById('profile-select')?.value || 'foot-hiking';
-  const res = await fetch(`https://api.heigit.org/openrouteservice/v2/directions/${profile}/geojson`, {
+  const res = await fetch(`https://router.project-osrm.org/route/v1/foot/`, {
     method:'POST',
     headers:{ 'Authorization':`Bearer ${ORS_KEY}`, 'Content-Type':'application/json' },
     body: JSON.stringify({
@@ -635,7 +635,7 @@ async function rerouteAll() {
     const from = points[i], to = points[i+1];
     if (useRouting) {
       try {
-        const res = await fetch(`https://api.heigit.org/openrouteservice/v2/directions/${profile}/geojson`, {
+        const res = await fetch(`https://router.project-osrm.org/route/v1/foot/`, {
           method:'POST', headers:{ 'Authorization':`Bearer ${ORS_KEY}`, 'Content-Type':'application/json' },
           body: JSON.stringify({ coordinates:[[from.lng,from.lat],[to.lng,to.lat]], elevation:true })
         });
