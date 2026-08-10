@@ -392,6 +392,7 @@
 
 <script>
 const ORS_KEY = "EyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6Ijk1YTZhZDVjNDc0MTQ4OGY4MDViZDA0ZjAyZWNkNGVmIiwiaCI6Im11cm11cjY0In0=";
+const ORS_BASE = "https://api.heigit.org/openrouteservice/v2/directions";
 const HIKING_KMH = 4;
 
 let points = [], segments = [], undoStack = [], redoStack = [];
@@ -578,9 +579,9 @@ function coordToPoint(coord) {
 /* ── ROUTING ── */
 async function routeSegment(from, to) {
   const profile = document.getElementById('profile-select')?.value || 'foot-hiking';
-  const res = await fetch(`https://router.project-osrm.org/route/v1/foot/`, {
+  const res = await fetch(`${ORS_BASE}/${profile}/geojson`, {
     method:'POST',
-    headers:{ 'Authorization':`Bearer ${ORS_KEY}`, 'Content-Type':'application/json' },
+    headers:{ 'Authorization': ORS_KEY, 'Content-Type':'application/json' },
     body: JSON.stringify({ coordinates:[[from.lng,from.lat],[to.lng,to.lat]], elevation:true })
   });
   if (!res.ok) return null;
@@ -595,9 +596,9 @@ async function routeSegment(from, to) {
 
 async function generateRoundTrip(start, lengthMetres, seed) {
   const profile = document.getElementById('profile-select')?.value || 'foot-hiking';
-  const res = await fetch(`https://router.project-osrm.org/route/v1/foot/`, {
+  const res = await fetch(`${ORS_BASE}/${profile}/geojson`, {
     method:'POST',
-    headers:{ 'Authorization':`Bearer ${ORS_KEY}`, 'Content-Type':'application/json' },
+    headers:{ 'Authorization': ORS_KEY, 'Content-Type':'application/json' },
     body: JSON.stringify({
       coordinates:[[start.lng,start.lat]],
       options:{ round_trip:{ length:lengthMetres, points:8, seed: seed || Math.floor(Math.random()*10000) } },
@@ -635,8 +636,8 @@ async function rerouteAll() {
     const from = points[i], to = points[i+1];
     if (useRouting) {
       try {
-        const res = await fetch(`https://router.project-osrm.org/route/v1/foot/`, {
-          method:'POST', headers:{ 'Authorization':`Bearer ${ORS_KEY}`, 'Content-Type':'application/json' },
+        const res = await fetch(`${ORS_BASE}/${profile}/geojson`, {
+          method:'POST', headers:{ 'Authorization': ORS_KEY, 'Content-Type':'application/json' },
           body: JSON.stringify({ coordinates:[[from.lng,from.lat],[to.lng,to.lat]], elevation:true })
         });
         if (res.ok) { const geo=await res.json(); newSegs.push({ coords:geo.features[0].geometry.coordinates, routed:true }); continue; }
