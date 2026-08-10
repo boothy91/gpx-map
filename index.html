@@ -490,11 +490,13 @@ map.on('click', async e => {
   let routedSegment = null;
 
   if (useRouting && previousPoint) {
-    const routedResult = await routeSegment(previousPoint, rawTapPoint);
-    if (routedResult?.coords?.length >= 2) {
-      routedSegment = { coords: routedResult.coords, routed: true };
-      newPoint = routedResult.snappedPoint;
-    }
+    try {
+      const routedResult = await routeSegment(previousPoint, rawTapPoint);
+      if (routedResult?.coords?.length >= 2) {
+        routedSegment = { coords: routedResult.coords, routed: true };
+        newPoint = routedResult.snappedPoint;
+      }
+    } catch { /* routing failed — fall back to straight line below */ }
   }
 
   const newPts = [...points, newPoint];
