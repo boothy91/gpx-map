@@ -415,7 +415,7 @@ map.addControl(new maplibregl.ScaleControl(), 'bottom-left');
 map.on('load', () => { restoreAllLayers(); renderRoutesList(); });
 
 /* ── CHANGELOG MODAL ── */
-const CHANGELOG_VERSION = 'v2.3-round-trip-loop';
+const CHANGELOG_VERSION = 'v2.4-round-trip-loop';
 const PATH_SNAP_TOLERANCE_PX = 18;
 function showChangelogIfNeeded() {
   const lastVersion = localStorage.getItem('trail-planner-changelog-version');
