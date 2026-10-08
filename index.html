@@ -464,7 +464,7 @@ map.on('mousedown', e => {
   longPressTimer = setTimeout(() => {
     longPressTimer = null;
     showPoiModal(name => {
-      pois.push({ lat: captureLngLat.lat, lng: captureLngLat.lng, name });
+      pois.push({ lat: captureLngLat.lat, lng: captureLngLat.lng, name }); updateButtons();
       updatePoiMarkers();
     });
   }, 600);
@@ -477,7 +477,7 @@ map.on('touchstart', e => {
   longPressTimer = setTimeout(() => {
     longPressTimer = null;
     showPoiModal(name => {
-      pois.push({ lat: touch.lat, lng: touch.lng, name });
+      pois.push({ lat: touch.lat, lng: touch.lng, name }); updateButtons();
       updatePoiMarkers();
     });
   }, 600);
@@ -695,7 +695,7 @@ function updatePoiMarkers() {
     el.addEventListener('click', ev => {
       ev.stopPropagation();
       if (confirm('Remove POI "' + poi.name + '"?')) {
-        pois.splice(i, 1);
+        pois.splice(i, 1); updateButtons();
         updatePoiMarkers();
       }
     });
@@ -815,9 +815,9 @@ function updateButtons() {
   document.getElementById('btn-undo').disabled    = undoStack.length===0;
   document.getElementById('btn-redo').disabled    = redoStack.length===0;
   document.getElementById('btn-clear').disabled   = !has;
-  document.getElementById('btn-gpx').disabled     = !hasTwo;
+  document.getElementById('btn-gpx').disabled     = !(hasTwo||pois.length>0);
   document.getElementById('btn-geojson').disabled = !hasTwo;
-  document.getElementById('btn-topbar-download').disabled = !hasTwo;
+  document.getElementById('btn-topbar-download').disabled = !(hasTwo||pois.length>0);
 }
 
 /* ── UNIT ── */
@@ -920,7 +920,13 @@ document.getElementById('btn-clear').addEventListener('click',()=>{
 
 /* ── EXPORT ── */
 document.getElementById('btn-gpx').addEventListener('click',()=>{
-  if(!currentRoute) return;
+  if(!currentRoute){
+    if(!pois.length) return;
+    const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const w=pois.map(p=>`  <wpt lat="${p.lat.toFixed(7)}" lon="${p.lng.toFixed(7)}">\n    <name>${esc(p.name)}</name>\n  </wpt>`).join('\n');
+    download(pois.length===1?(String(pois[0].name).replace(/[^\w-]+/g,'_')||'waypoint')+'.gpx':'waypoints.gpx',`<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Trail Planner" xmlns="http://www.topografix.com/GPX/1/1">\n${w}\n</gpx>`,'application/gpx+xml');
+    return;
+  }
   const coords=currentRoute.coordinates;
 
   const SPEED_KMH = HIKING_KMH;
