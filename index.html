@@ -726,7 +726,13 @@ function updateWaypointList() {
   points.forEach((p,i) => {
     const div = document.createElement('div'); div.className='waypoint-item';
     const nc = i===0?'first':i===points.length-1?'last':'';
-    div.innerHTML=`<div class="wp-num ${nc}">${i+1}</div><div>${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}</div>`;
+    div.innerHTML=`<div class="wp-num ${nc}">${i+1}</div><div style="flex:1">${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}</div><button class="wp-export" style="font-size:10px;padding:2px 6px;">GPX</button>`;
+    div.querySelector('.wp-export').addEventListener('click',e=>{
+      e.stopPropagation();
+      const n=(prompt('Waypoint name:','Waypoint '+(i+1))||'').trim(); if(!n) return;
+      const esc=n.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      download(n.replace(/[^\w-]+/g,'_')+'.gpx',`<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Trail Planner" xmlns="http://www.topografix.com/GPX/1/1">\n  <wpt lat="${p.lat.toFixed(7)}" lon="${p.lng.toFixed(7)}">\n    <name>${esc}</name>\n  </wpt>\n</gpx>`,'application/gpx+xml');
+    });
     list.appendChild(div);
   });
 }
