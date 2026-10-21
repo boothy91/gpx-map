@@ -644,6 +644,90 @@
       #drawer.open { max-height: 40dvh; }
     }
 
+
+
+    /* ── Mobile app layout: no horizontal toolbar scrolling ── */
+    #mobile-tools { display:none; }
+    @media (max-width: 900px) {
+      #app { display:flex; flex-direction:column; height:100dvh; min-height:0; gap:0; }
+      #top-bar {
+        display:grid !important;
+        grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+        grid-template-rows:auto auto;
+        gap:6px;
+        padding:8px 9px 9px;
+        width:100%; min-width:0; flex:0 0 auto;
+        overflow:visible !important;
+        border-bottom:1px solid var(--border);
+      }
+      #planner-brand { grid-column:1 / -1; width:100%; min-width:0; margin:0; padding:2px 2px 7px; }
+      .brand-mark { width:34px; height:34px; flex-basis:34px; }
+      .brand-copy strong { font-size:13px; }
+      .brand-copy small { font-size:9px; }
+      #top-bar > .top-btn {
+        width:100%; min-width:0; min-height:42px; padding:8px 3px;
+        display:flex; flex-direction:column; gap:3px;
+        font-size:9px; letter-spacing:.025em; white-space:normal;
+        border-radius:10px; touch-action:manipulation;
+      }
+      #top-bar > .top-btn svg { width:15px; height:15px; }
+      #map-wrap { order:2; flex:1 1 auto; width:100%; min-width:0; min-height:130px; height:auto; }
+      #map { position:absolute; inset:0; }
+      #drawer {
+        order:3; width:100%; min-width:0; flex:0 0 auto; height:auto;
+        max-height:56px; overflow:hidden; border-top:1px solid var(--border);
+        transition:max-height .25s ease; padding-bottom:env(safe-area-inset-bottom,0px);
+      }
+      #drawer.open { max-height:min(58dvh,560px); overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+      #drawer-handle {
+        position:sticky; top:0; z-index:6; min-height:55px; padding:10px 14px;
+        background:var(--card); border-bottom:1px solid var(--border); touch-action:manipulation;
+      }
+      #drawer-handle-left { min-width:0; gap:8px; flex-wrap:wrap; }
+      #drawer-handle-left > span { font-size:11px; letter-spacing:.07em; }
+      #drawer-stats-mini { gap:6px 10px; font-size:10px; }
+      #drawer-chevron { width:18px; height:18px; }
+      #drawer-content { padding:12px 12px 20px; }
+      #mobile-tools { display:block; margin:0 0 15px; padding:0 0 13px; border-bottom:1px solid var(--border); }
+      #mobile-tools-title { margin:0 0 9px; color:var(--text-sec); font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+      #mobile-tools-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
+      #mobile-tools-grid .top-btn {
+        display:flex; align-items:center; justify-content:center; gap:6px;
+        min-width:0; min-height:42px; padding:8px 5px; white-space:normal;
+        font-size:10px; border-radius:9px; touch-action:manipulation;
+      }
+      #mobile-tools-grid .top-btn svg { width:14px; height:14px; }
+      .stats-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+      .stat { min-height:62px; padding:10px; }
+      .stat-value { font-size:19px; }
+      .stat-label { font-size:9px; }
+      .sec-label { margin-top:16px; margin-bottom:9px; }
+      .row { gap:7px; }
+      .row > * { min-width:0; }
+      input,select,textarea { font-size:16px !important; } /* avoid iOS/WebView auto-zoom */
+      button,.unit-btn,.waypoint-item,.route-card { touch-action:manipulation; }
+      .maplibregl-ctrl-group button { width:38px; height:38px; }
+      .maplibregl-ctrl-bottom-left,.maplibregl-ctrl-bottom-right { bottom:5px; }
+      #toast { left:50%; right:auto; transform:translateX(-50%); bottom:68px; max-width:calc(100vw - 24px); text-align:center; }
+      .modal { padding:10px; }
+      .modal-content { width:100%; max-width:560px; max-height:calc(100dvh - 20px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)); overflow:auto; -webkit-overflow-scrolling:touch; }
+      .modal-footer { position:sticky; bottom:0; background:var(--card); flex-wrap:wrap; }
+    }
+    @media (max-width:520px) {
+      #top-bar { padding:7px 7px 8px; gap:5px; }
+      #top-bar > .top-btn { min-height:40px; font-size:8px; }
+      .brand-copy small { max-width:260px; }
+      #drawer.open { max-height:60dvh; }
+      #mobile-tools-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    }
+    @media (max-height:650px) and (max-width:900px) {
+      #planner-brand { padding-bottom:3px; }
+      .brand-copy small { display:none; }
+      #top-bar { gap:4px; padding-top:5px; padding-bottom:6px; }
+      #top-bar > .top-btn { min-height:35px; }
+      #drawer.open { max-height:52dvh; }
+    }
+
   </style>
 </head>
 <body>
@@ -719,6 +803,10 @@
     </div>
 
     <div id="drawer-content">
+      <div id="mobile-tools">
+        <div id="mobile-tools-title">Map tools</div>
+        <div id="mobile-tools-grid"></div>
+      </div>
       <!-- Stats -->
       <div class="stats-grid">
         <div class="stat"><div class="stat-label">Distance</div><div class="stat-value" id="stat-dist">—</div></div>
@@ -1760,5 +1848,40 @@ function renderRoutesList() {
   });
 }
 </script>
+
+<script>
+/* Mobile toolbar: keep primary actions visible and move secondary actions into the planner panel. */
+(function () {
+  const mq = window.matchMedia('(max-width: 900px)');
+  const topbar = document.getElementById('top-bar');
+  const toolsGrid = document.getElementById('mobile-tools-grid');
+  const drawer = document.getElementById('drawer');
+  if (!topbar || !toolsGrid || !drawer) return;
+  const secondaryIds = ['btn-terrain','btn-undo','btn-redo','btn-clear','btn-topbar-load','btn-topbar-download'];
+  const records = secondaryIds.map(id => {
+    const el = document.getElementById(id);
+    return el ? { el, parent: el.parentNode, next: el.nextSibling } : null;
+  }).filter(Boolean);
+  function applyMobileLayout() {
+    if (mq.matches) {
+      records.forEach(({el}) => { if (el.parentNode !== toolsGrid) toolsGrid.appendChild(el); });
+      drawer.classList.remove('open');
+    } else {
+      records.forEach(({el,parent,next}) => {
+        if (el.parentNode !== parent) parent.insertBefore(el, next && next.parentNode === parent ? next : null);
+      });
+      drawer.classList.add('open');
+    }
+    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+  }
+  applyMobileLayout();
+  if (mq.addEventListener) mq.addEventListener('change', applyMobileLayout);
+  else mq.addListener(applyMobileLayout);
+  document.getElementById('drawer-handle')?.addEventListener('click', () => {
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 280);
+  });
+})();
+</script>
+
 </body>
 </html>
