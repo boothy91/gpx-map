@@ -207,6 +207,266 @@
 
     .maplibregl-ctrl-bottom-right { bottom: 0; }
     .maplibregl-ctrl-bottom-left  { bottom: 0; }
+
+    /* ── WristNav planner refresh ── */
+    :root {
+      --bg: #111713;
+      --card: #1a211d;
+      --card2: #222b25;
+      --border: #354238;
+      --blue: #c8d7a5;
+      --blue-dim: #687a55;
+      --red: #e06c61;
+      --text: #f4f4e9;
+      --text-sec: #a4b09f;
+      --green: #8abf79;
+      --accent: #d5b477;
+    }
+    html, body { background: var(--bg); }
+    #app {
+      display: grid;
+      grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+      height: 100dvh;
+      background: var(--bg);
+    }
+    #top-bar {
+      grid-column: 1 / -1;
+      grid-row: 1;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 14px;
+      background: #171e19;
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 4px 16px rgba(0,0,0,.16);
+    }
+    #planner-brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      min-width: 255px;
+      margin-right: auto;
+      padding: 2px 18px 2px 2px;
+    }
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+      background: var(--blue);
+      color: #172018;
+      font-weight: 800;
+      font-size: 17px;
+      letter-spacing: -2px;
+      box-shadow: 0 4px 14px rgba(200,215,165,.12);
+    }
+    .brand-mark span { color: #4d6542; }
+    .brand-copy strong {
+      display: block;
+      color: var(--text);
+      font-size: 15px;
+      letter-spacing: -.03em;
+    }
+    .brand-copy strong span {
+      margin-left: 5px;
+      color: var(--blue);
+      font-size: 9px;
+      letter-spacing: .14em;
+      vertical-align: 2px;
+    }
+    .brand-copy small {
+      display: block;
+      margin-top: 4px;
+      color: var(--text-sec);
+      font-size: 10px;
+      letter-spacing: .01em;
+    }
+    .top-btn {
+      min-height: 34px;
+      padding: 8px 10px;
+      border-radius: 9px;
+      background: #222b25;
+      border-color: #3a483d;
+      color: var(--text);
+      font-size: 10px;
+      letter-spacing: .035em;
+      text-transform: none;
+    }
+    .top-btn svg { stroke: var(--blue); }
+    .top-btn:hover:not(:disabled) {
+      border-color: var(--blue);
+      background: rgba(200,215,165,.09);
+    }
+    .top-btn.active {
+      border-color: var(--blue);
+      background: rgba(200,215,165,.14);
+      box-shadow: none;
+    }
+    .top-btn.danger { color: var(--red); }
+    .top-btn.danger svg { stroke: var(--red); }
+    #top-dist {
+      padding: 8px 11px;
+      border-radius: 9px;
+      background: var(--blue);
+      color: #172018;
+    }
+    #map-wrap {
+      grid-column: 2;
+      grid-row: 2;
+      min-width: 0;
+      min-height: 0;
+      background: #d7dfd0;
+    }
+    #map { inset: 0; }
+    #center-crosshair { opacity: .6; }
+    #drawer {
+      grid-column: 1;
+      grid-row: 2;
+      max-height: none;
+      height: 100%;
+      overflow-y: auto;
+      border-top: 0;
+      border-right: 1px solid var(--border);
+      background: #151c17;
+      transition: none;
+    }
+    #drawer.open { max-height: none; overflow-y: auto; }
+    #drawer-handle {
+      padding: 17px 18px 14px;
+      background: #151c17;
+      border-bottom: 1px solid var(--border);
+      cursor: default;
+    }
+    #drawer-handle-left { gap: 12px; flex-wrap: wrap; }
+    #drawer-handle-left > span {
+      color: var(--text);
+      font-size: 13px;
+      letter-spacing: .02em;
+      text-transform: none;
+    }
+    #drawer-stats-mini { gap: 10px; font-size: 10px; }
+    #drawer-stats-mini b { color: var(--blue); }
+    #drawer-chevron { display: none; }
+    #drawer-content { padding: 16px 16px 26px; }
+    .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 18px; }
+    .stat {
+      min-height: 76px;
+      padding: 12px;
+      border-radius: 12px;
+      background: #202922;
+      border-color: #354238;
+    }
+    .stat-label { font-size: 9px; letter-spacing: .08em; }
+    .stat-value { font-size: 21px; letter-spacing: -.04em; }
+    .stat-value span { font-size: 11px; }
+    .sec-label {
+      margin-top: 22px;
+      margin-bottom: 9px;
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .025em;
+      text-transform: none;
+    }
+    .row { gap: 7px; margin-bottom: 8px; }
+    .unit-btn {
+      padding: 10px;
+      border-radius: 9px;
+      border-color: var(--border);
+      background: var(--card2);
+      font-size: 11px;
+    }
+    .unit-btn.active { background: var(--blue); border-color: var(--blue); color: #172018; }
+    #profile-select {
+      min-height: 38px;
+      border-radius: 9px;
+      border-color: var(--border);
+      background-color: var(--card2);
+      font-size: 12px;
+    }
+    #roundtrip-distance, #poi-name-input { min-height: 40px; }
+    #btn-roundtrip { min-height: 40px; padding-left: 15px; padding-right: 15px; }
+    .waypoint-item, .route-card {
+      padding: 10px;
+      border-radius: 10px;
+      border-color: var(--border);
+      background: #202922;
+      font-size: 11px;
+    }
+    .wp-num { width: 23px; height: 23px; font-size: 10px; }
+    .route-card-name { font-size: 12px; }
+    .route-card-meta { font-size: 10px; }
+    #elevation-canvas, .elev-empty { height: 92px; border-radius: 10px; }
+    .elev-empty { font-size: 11px; }
+    #toast {
+      bottom: 22px;
+      padding: 10px 16px;
+      border-radius: 10px;
+      background: #263229;
+      border-color: #52644f;
+      font-size: 12px;
+    }
+    .modal-content {
+      background: #1a211d;
+      border-color: #405044;
+      border-radius: 16px;
+    }
+    .modal-header, .modal-footer { border-color: var(--border); }
+    .modal-header h2 { font-size: 17px; }
+    .changelog-item p, .changelog-item ul { color: var(--text-sec); }
+
+    @media (max-width: 900px) {
+      #app {
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
+      }
+      #top-bar {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding: 8px;
+        gap: 6px;
+        scrollbar-width: none;
+      }
+      #top-bar::-webkit-scrollbar { display: none; }
+      #planner-brand { min-width: 220px; margin-right: 5px; padding-right: 8px; }
+      .brand-mark { width: 36px; height: 36px; border-radius: 11px; }
+      .brand-copy strong { font-size: 13px; }
+      .brand-copy small { max-width: 185px; font-size: 9px; }
+      #map-wrap { order: 2; flex: 1; min-height: 180px; }
+      #drawer {
+        order: 3;
+        height: auto;
+        max-height: 43vh;
+        flex-shrink: 0;
+        border-top: 1px solid var(--border);
+        border-right: 0;
+        overflow-y: auto;
+      }
+      #drawer.open { max-height: 68vh; }
+      #drawer-handle { cursor: pointer; padding: 12px 14px; }
+      #drawer-chevron { display: block; }
+      #drawer-content { padding: 12px 14px 22px; }
+      .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+      .stat { min-height: 64px; padding: 8px 6px; }
+      .stat-value { font-size: 15px; }
+      .stat-label { font-size: 8px; }
+      .sec-label { margin-top: 16px; }
+    }
+    @media (max-width: 520px) {
+      #planner-brand { min-width: 195px; }
+      .brand-copy small { max-width: 155px; white-space: normal; line-height: 1.25; }
+      .top-btn { padding: 8px; }
+      .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      #drawer { max-height: 40vh; }
+      #drawer.open { max-height: 70vh; }
+      #drawer-stats-mini { gap: 7px; }
+    }
+
   </style>
 </head>
 <body>
@@ -214,6 +474,13 @@
 
   <!-- ── TOP BAR ── -->
   <div id="top-bar">
+    <div id="planner-brand">
+      <div class="brand-mark">W<span>N</span></div>
+      <div class="brand-copy">
+        <strong>WristNav <span>PLANNER</span></strong>
+        <small>Plan a route · review terrain · send GPX to your watch</small>
+      </div>
+    </div>
     <button class="top-btn" id="btn-satellite">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
       <span id="btn-satellite-label">Topo</span>
@@ -261,7 +528,7 @@
   <div id="map-wrap"><div id="map"></div><div id="center-crosshair"></div></div>
 
   <!-- ── BOTTOM DRAWER ── -->
-  <div id="drawer">
+  <div id="drawer" class="open">
     <div id="drawer-handle">
       <div id="drawer-handle-left">
         <span>Trail Info</span>
