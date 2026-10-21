@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Trail Planner</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
   <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
@@ -465,6 +465,183 @@
       #drawer { max-height: 40vh; }
       #drawer.open { max-height: 70vh; }
       #drawer-stats-mini { gap: 7px; }
+    }
+
+
+    /* ── WebEmbed / phone-sized screens ── */
+    @media (max-width: 900px) {
+      html, body {
+        width: 100%;
+        min-width: 0;
+        height: 100%;
+        overflow: hidden;
+        overscroll-behavior: none;
+      }
+      #app {
+        width: 100%;
+        min-width: 0;
+        height: 100vh;
+        height: 100dvh;
+        min-height: 0;
+        gap: 0;
+      }
+      #top-bar {
+        flex: 0 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+        flex-wrap: wrap;
+        overflow: visible;
+        padding: 7px 8px 8px;
+        gap: 6px;
+      }
+      #planner-brand {
+        flex: 0 0 100%;
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 1px 3px 5px;
+        gap: 9px;
+      }
+      .brand-mark {
+        flex: 0 0 34px;
+        width: 34px;
+        height: 34px;
+        font-size: 14px;
+      }
+      .brand-copy { min-width: 0; }
+      .brand-copy strong { font-size: 13px; }
+      .brand-copy small {
+        max-width: none;
+        font-size: 9px;
+        line-height: 1.25;
+      }
+      #top-bar > button {
+        flex: 0 0 auto;
+        min-height: 38px;
+        padding: 8px 10px;
+        font-size: 11px;
+        white-space: nowrap;
+        touch-action: manipulation;
+      }
+      #map-wrap {
+        order: 2;
+        position: relative;
+        flex: 1 1 auto;
+        width: 100%;
+        min-width: 0;
+        min-height: 160px;
+        height: auto;
+      }
+      #map { position: absolute; inset: 0; }
+      #drawer {
+        order: 3;
+        position: relative;
+        width: 100%;
+        box-sizing: border-box;
+        height: auto;
+        max-height: 38dvh;
+        min-height: 0;
+        flex: 0 1 auto;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        border-top: 1px solid var(--border);
+        border-right: 0;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+      #drawer.open { max-height: 48dvh; }
+      #drawer-handle {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        display: flex;
+        align-items: center;
+        min-height: 48px;
+        box-sizing: border-box;
+        padding: 10px 13px;
+        background: #151c17;
+        touch-action: manipulation;
+      }
+      #drawer-handle-left {
+        flex: 1 1 auto;
+        min-width: 0;
+        gap: 8px;
+      }
+      #drawer-handle-left > span { font-size: 12px; }
+      #drawer-stats-mini {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px 8px;
+        font-size: 10px;
+      }
+      #drawer-chevron { display: block; flex: 0 0 auto; }
+      #drawer-content { padding: 10px 12px 18px; }
+      .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 7px;
+        margin-bottom: 13px;
+      }
+      .stat { min-height: 60px; padding: 9px 10px; }
+      .stat-value { font-size: 19px; }
+      .stat-label { font-size: 9px; }
+      .sec-label { margin-top: 16px; margin-bottom: 8px; }
+      .row { flex-wrap: wrap; }
+      .row > * { min-width: 0; }
+      input, select, textarea, button { max-width: 100%; }
+      button, .unit-btn, .waypoint-item, .route-card { touch-action: manipulation; }
+      .maplibregl-ctrl-group button { min-width: 36px; min-height: 36px; }
+      .maplibregl-ctrl-bottom-left,
+      .maplibregl-ctrl-bottom-right { bottom: 4px; }
+      #toast {
+        left: 50%;
+        right: auto;
+        bottom: calc(40dvh + 12px);
+        max-width: calc(100vw - 28px);
+        transform: translateX(-50%);
+        box-sizing: border-box;
+        text-align: center;
+      }
+      .modal {
+        padding: 10px;
+        box-sizing: border-box;
+      }
+      .modal-content {
+        width: 100%;
+        max-width: 560px;
+        max-height: calc(100dvh - 20px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .modal-footer {
+        position: sticky;
+        bottom: 0;
+        background: #1a211d;
+        flex-wrap: wrap;
+      }
+    }
+    @media (max-width: 520px) {
+      #top-bar { gap: 5px; padding: 6px 7px 7px; }
+      #top-bar > button { min-height: 38px; padding: 8px; }
+      #map-wrap { min-height: 145px; }
+      #drawer { max-height: 34dvh; }
+      #drawer.open { max-height: 46dvh; }
+      #drawer-handle { min-height: 46px; padding: 8px 11px; }
+      #drawer-stats-mini { font-size: 9px; }
+      .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .stat { min-height: 56px; }
+      .stat-value { font-size: 18px; }
+      #toast { bottom: calc(35dvh + 10px); }
+      .modal-header { padding: 14px; }
+      .modal-body { padding: 14px; }
+      .modal-footer { padding: 12px 14px; }
+    }
+    @media (max-height: 620px) and (max-width: 900px) {
+      #planner-brand { padding-bottom: 1px; }
+      .brand-copy small { display: none; }
+      #drawer { max-height: 32dvh; }
+      #drawer.open { max-height: 40dvh; }
     }
 
   </style>
