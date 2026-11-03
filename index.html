@@ -352,7 +352,13 @@
           GeoJSON
         </button>
       </div>
-      <input type="file" id="gpx-upload-input" accept=".gpx,.tcx,.kml,.kmz" multiple style="display:none" />
+      <div class="row">
+<button class="top-btn" id="btn-fit" disabled style="flex:1;justify-content:center;">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+Export FIT (Garmin)
+</button>
+</div>
+<input type="file" id="gpx-upload-input" accept=".gpx,.tcx,.kml,.kmz" multiple style="display:none" />
 
       <!-- Elevation -->
       <div class="sec-label">
@@ -844,6 +850,7 @@ function updateButtons() {
   document.getElementById('btn-clear').disabled   = !has;
   document.getElementById('btn-gpx').disabled     = !(hasTwo||pois.length>0);
   document.getElementById('btn-geojson').disabled = !hasTwo;
+document.getElementById('btn-fit').disabled = !hasTwo;
   document.getElementById('btn-topbar-download').disabled = !(hasTwo||pois.length>0);
 }
 
@@ -946,6 +953,102 @@ document.getElementById('btn-clear').addEventListener('click',()=>{
 });
 
 /* ── EXPORT ── */
+/* FIT COURSE EXPORT (added) */
+const FIT_EPOCH_OFFSET = 631065600;
+const FIT_CRC_TABLE = [0x0000,0xCC01,0xD801,0x1400,0xF001,0x3C00,0x2800,0xE401,0xA001,0x6C00,0x7800,0xB401,0x5000,0x9C01,0x8801,0x4400];
+function fitCrc16(bytes, crc) {
+  for (let i = 0; i < bytes.length; i++) {
+    const b = bytes[i];
+    let tmp = FIT_CRC_TABLE[crc & 0xF];
+    crc = (crc >> 4) & 0x0FFF;
+    crc = crc ^ tmp ^ FIT_CRC_TABLE[b & 0xF];
+    tmp = FIT_CRC_TABLE[crc & 0xF];
+    crc = (crc >> 4) & 0x0FFF;
+    crc = crc ^ tmp ^ FIT_CRC_TABLE[(b >> 4) & 0xF];
+  }
+  return crc;
+}
+function buildFitCourse(coords, waypoints, name, sport) {
+  const out = [];
+  const u8 = v => out.push(v & 255);
+  const u16 = v => { u8(v); u8(v >> 8); };
+  const u32 = v => { v = v >>> 0; u8(v); u8(v >>> 8); u8(v >>> 16); u8(v >>> 24); };
+  const s32 = v => u32(v | 0);
+  const semi = deg => Math.round(deg * 2147483648 / 180);
+  const str = (s, n) => {
+    const b = new TextEncoder().encode(String(s));
+    for (let i = 0; i < n; i++) u8(i < b.length && i < n - 1 ? b[i] : 0);
+  };
+  const def = (local, global, fields) => {
+    u8(0x40 | local); u8(0); u8(0); u16(global); u8(fields.length);
+    fields.forEach(f => { u8(f[0]); u8(f[1]); u8(f[2]); });
+  };
+  const pts = coords.map(c => ({ lat: c[1], lng: c[0], ele: c.length >= 3 ? c[2] : null }));
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + haversine(pts[i - 1], pts[i]) * 1000);
+  const total = cum[cum.length - 1];
+  const start = Math.floor(Date.now() / 1000) - FIT_EPOCH_OFFSET;
+  const tAt = d => start + Math.round(d / (HIKING_KMH * 1000 / 3600));
+  const endT = tAt(total);
+  const first = pts[0], last = pts[pts.length - 1];
+  // file_id
+  def(0, 0, [[0,1,0x00],[1,2,0x84],[2,2,0x84],[4,4,0x86]]);
+  u8(0); u8(6); u16(255); u16(0); u32(start);
+  // course
+  def(1, 31, [[4,1,0x00],[5,32,0x07]]);
+  u8(1); u8(sport); str(name, 32);
+  // lap
+  def(2, 19, [[253,4,0x86],[2,4,0x86],[3,4,0x85],[4,4,0x85],[5,4,0x85],[6,4,0x85],[7,4,0x86],[8,4,0x86],[9,4,0x86]]);
+  u8(2); u32(endT); u32(start);
+  s32(semi(first.lat)); s32(semi(first.lng)); s32(semi(last.lat)); s32(semi(last.lng));
+  u32((endT - start) * 1000); u32((endT - start) * 1000); u32(Math.round(total * 100));
+  // course points (waypoints), snapped to the nearest track vertex
+  const wps = (waypoints || []).slice(0, 100);
+  if (wps.length) {
+    def(3, 32, [[1,4,0x86],[2,4,0x85],[3,4,0x85],[4,4,0x86],[5,1,0x00],[6,16,0x07]]);
+    wps.forEach(w => {
+      let bi = 0, bd = Infinity;
+      for (let i = 0; i < pts.length; i++) {
+        const d = haversine(pts[i], { lat: w.lat, lng: w.lng });
+        if (d < bd) { bd = d; bi = i; }
+      }
+      u8(3); u32(tAt(cum[bi])); s32(semi(w.lat)); s32(semi(w.lng));
+      u32(Math.round(cum[bi] * 100)); u8(0); str(w.name || 'Point', 16);
+    });
+  }
+  // records
+  def(4, 20, [[253,4,0x86],[0,4,0x85],[1,4,0x85],[5,4,0x86],[2,2,0x84]]);
+  pts.forEach((p, i) => {
+    u8(4); u32(tAt(cum[i])); s32(semi(p.lat)); s32(semi(p.lng)); u32(Math.round(cum[i] * 100));
+    u16(p.ele == null ? 0xFFFF : Math.max(0, Math.min(65534, Math.round((p.ele + 500) * 5))));
+  });
+  // header + data + crc
+  const header = [14, 0x20, 2132 & 255, 2132 >> 8, 0, 0, 0, 0, 0x2E, 0x46, 0x49, 0x54, 0, 0];
+  const size = out.length;
+  header[4] = size & 255; header[5] = (size >>> 8) & 255; header[6] = (size >>> 16) & 255; header[7] = (size >>> 24) & 255;
+  const hcrc = fitCrc16(header.slice(0, 12), 0);
+  header[12] = hcrc & 255; header[13] = hcrc >> 8;
+  const body = header.concat(out);
+  const fcrc = fitCrc16(body, 0);
+  body.push(fcrc & 255, fcrc >> 8);
+  return new Uint8Array(body);
+}
+function downloadBytes(filename, bytes) {
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+document.getElementById('btn-fit').addEventListener('click', () => {
+  if (!currentRoute || currentRoute.coordinates.length < 2) return;
+  const profile = document.getElementById('profile-select')?.value || 'foot-hiking';
+  const sport = profile.startsWith('cycling') ? 2 : profile === 'foot-walking' ? 11 : profile === 'foot-hiking' ? 17 : 0;
+  downloadBytes('trail.fit', buildFitCourse(currentRoute.coordinates, pois, 'My Trail', sport));
+  showToast('FIT course exported');
+});
+
 document.getElementById('btn-gpx').addEventListener('click',()=>{
   if(!currentRoute){
     if(!pois.length) return;
@@ -980,7 +1083,7 @@ document.getElementById('btn-gpx').addEventListener('click',()=>{
       <time>${times[i].toISOString()}</time>
     </trkpt>`).join('\n');
 
-  const wptXml = pois.map(p => `  <wpt lat="${p.lat.toFixed(7)}" lon="${p.lng.toFixed(7)}">\n    <name>${p.name}</name>\n  </wpt>`).join('\n');
+  const wptXml = pois.map(p => `  <wpt lat="${p.lat.toFixed(7)}" lon="${p.lng.toFixed(7)}">\n    <name>${String(p.name).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</name>\n  </wpt>`).join('\n');
   download('trail.gpx',`<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Trail Planner">\n${wptXml ? wptXml + '\n' : ''}  <trk><name>My Trail</name><trkseg>\n${trkpts}\n  </trkseg></trk>\n</gpx>`,'application/gpx+xml');
 });
 document.getElementById('btn-geojson').addEventListener('click',()=>{
