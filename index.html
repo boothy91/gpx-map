@@ -1160,8 +1160,52 @@ document.getElementById('btn-gpx').addEventListener('click',()=>{
       <time>${times[i].toISOString()}</time>
     </trkpt>`).join('\n');
 
-  const wptXml = pois.map(p => `  <wpt lat="${p.lat.toFixed(7)}" lon="${p.lng.toFixed(7)}">\n    <name>${String(p.name).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</name>\n  </wpt>`).join('\n');
-  download('trail.gpx',`<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Trail Planner">\n${wptXml ? wptXml + '\n' : ''}  <trk><name>My Trail</name><trkseg>\n${trkpts}\n  </trkseg></trk>\n</gpx>`,'application/gpx+xml');
+  const xmlEsc = t => String(t ?? '')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&apos;');
+
+  const wptXml = pois.map(p =>
+    `  <wpt lat="${p.lat.toFixed(7)}" lon="${p.lng.toFixed(7)}">\n` +
+    `    <name>${xmlEsc(p.name)}</name>\n` +
+    `  </wpt>`
+  ).join('\n');
+
+  // ORS navigation instructions as GPX route points
+  const routePoints = [];
+  const supportedManeuvers = new Set([0,1,2,3,4,5,6,7,8,9,12,13]);
+
+  (segments || []).forEach(seg => {
+    if (!seg.routed || !seg.coords || seg.coords.length < 2) return;
+
+    (seg.instructions || []).forEach(step => {
+      const type = Number(step.type);
+      const index = Number(step.way_points?.[0]);
+
+      if (!supportedManeuvers.has(type) ||
+          !Number.isInteger(index) ||
+          index < 0 || index >= seg.coords.length) return;
+
+      const coord = seg.coords[index];
+      const instruction = step.instruction || step.name || 'Navigation point';
+
+      routePoints.push(
+        `    <rtept lat="${coord[1]}" lon="${coord[0]}">\n` +
+        `      <name>${xmlEsc(instruction)}</name>\n` +
+        (step.name && step.name !== instruction
+          ? `      <desc>${xmlEsc(step.name)}</desc>\n` : '') +
+        `    </rtept>`
+      );
+    });
+  });
+
+  const rteXml = routePoints.length
+    ? `  <rte><name>My Trail Navigation</name>\n${routePoints.join('\n')}\n  </rte>\n`
+    : '';
+
+  download('trail.gpx',`<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Trail Planner" xmlns="http://www.topografix.com/GPX/1/1">\n${wptXml ? wptXml + '\n' : ''}${rteXml}  <trk><name>My Trail</name><trkseg>\n${trkpts}\n  </trkseg></trk>\n</gpx>`,'application/gpx+xml');
 });
 document.getElementById('btn-geojson').addEventListener('click',()=>{
   if(!currentRoute) return;
