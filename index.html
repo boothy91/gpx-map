@@ -528,7 +528,7 @@ map.on('click', async e => {
     try {
       const routedResult = await routeSegment(previousPoint, rawTapPoint);
       if (routedResult?.coords?.length >= 2) {
-        routedSegment = { coords: routedResult.coords, routed: true };
+        routedSegment = { coords: routedResult.coords, instructions: routedResult.instructions || [], routed: true };
         newPoint = routedResult.snappedPoint;
       }
     } catch { /* routing failed — fall back to straight line below */ }
@@ -625,8 +625,12 @@ async function routeSegment(from, to) {
   const geo = await res.json();
   const coords = geo.features?.[0]?.geometry?.coordinates;
   if (!coords || coords.length < 2) return null;
+  const instructions = (geo.features?.[0]?.properties?.segments || [])
+    .flatMap(segment => segment.steps || []);
+
   return {
     coords,
+    instructions,
     snappedPoint: coordToPoint(coords[coords.length - 1])
   };
 }
@@ -644,16 +648,21 @@ async function generateRoundTrip(start, lengthMetres, seed) {
   });
   if (!res.ok) return null;
   const geo = await res.json();
-  const coords = geo.features?.[0]?.geometry?.coordinates;
+  const feature = geo.features?.[0];
+  const coords = feature?.geometry?.coordinates;
   if (!coords || coords.length < 2) return null;
-  return coords;
+
+  const instructions = (feature.properties?.segments || [])
+    .flatMap(segment => segment.steps || []);
+
+  return { coords, instructions };
 }
 
 async function doLastSegment(from, to) {
   try {
     const routedResult = await routeSegment(from, to);
     if (!routedResult) { addStraightSegment(from, to); return; }
-    segments.push({ coords: routedResult.coords, routed: true });
+    segments.push({ coords: routedResult.coords, instructions: routedResult.instructions || [], routed: true });
     rebuildRoute();
   } catch { addStraightSegment(from, to); }
   updateButtons();
@@ -677,7 +686,17 @@ async function rerouteAll() {
           method:'POST', headers:{ 'Authorization':`Bearer ${ORS_KEY}`, 'Content-Type':'application/json' },
           body: JSON.stringify({ coordinates:[[from.lng,from.lat],[to.lng,to.lat]], elevation:true })
         });
-        if (res.ok) { const geo=await res.json(); newSegs.push({ coords:geo.features[0].geometry.coordinates, routed:true }); continue; }
+        if (res.ok) {
+          const geo = await res.json();
+          const feature = geo.features?.[0];
+          const coords = feature?.geometry?.coordinates;
+          if (coords?.length >= 2) {
+            const instructions = (feature.properties?.segments || [])
+              .flatMap(segment => segment.steps || []);
+            newSegs.push({ coords, instructions, routed:true });
+            continue;
+          }
+        }
       } catch {}
     }
     newSegs.push({ coords:[[from.lng,from.lat],[to.lng,to.lat]], routed:false });
@@ -893,11 +912,16 @@ async function runRoundTripGeneration(val) {
   let best = null, bestDiff = Infinity, bestActual = 0;
   let requestMetres = targetMetres * getRoundTripBias(profile);
   for (let i = 0; i < 5; i++) {
-    const coords = await generateRoundTrip({ lat: center.lat, lng: center.lng }, requestMetres, seed);
-    if (!coords) continue;
+    const result = await generateRoundTrip({ lat: center.lat, lng: center.lng }, requestMetres, seed);
+    if (!result?.coords) continue;
+    const coords = result.coords;
     const actualMetres = roundTripCoordsLengthMetres(coords);
     const diff = Math.abs(actualMetres - targetMetres);
-    if (diff < bestDiff) { bestDiff = diff; best = coords; bestActual = actualMetres; }
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = { coords, instructions: result.instructions || [] };
+      bestActual = actualMetres;
+    }
     if (diff / targetMetres < 0.03) break;
     if (actualMetres > 0) {
       const ratio = targetMetres / actualMetres;
@@ -906,9 +930,9 @@ async function runRoundTripGeneration(val) {
   }
   if (!best) { showToast('Could not generate loop'); return; }
   saveRoundTripBias(profile, requestMetres / targetMetres);
-  segments = [{ coords: best, routed: true }];
+  segments = [{ coords: best.coords, instructions: best.instructions, routed: true }];
   rebuildRoute();
-  applyPoints([{ lat: best[0][1], lng: best[0][0] }, { lat: best[best.length-1][1], lng: best[best.length-1][0] }], true);
+  applyPoints([{ lat: best.coords[0][1], lng: best.coords[0][0] }, { lat: best.coords[best.coords.length-1][1], lng: best.coords[best.coords.length-1][0] }], true);
   updateButtons();
   const actualDisp = useMetric ? `${(bestActual/1000).toFixed(2)}km` : `${(bestActual/1609.34).toFixed(2)}mi`;
   const pctDiff = (bestActual - targetMetres) / targetMetres * 100;
@@ -968,7 +992,7 @@ function fitCrc16(bytes, crc) {
   }
   return crc;
 }
-function buildFitCourse(coords, waypoints, name, sport) {
+function buildFitCourse(coords, waypoints, name, sport, routeSegments) {
   const out = [];
   const u8 = v => out.push(v & 255);
   const u16 = v => { u8(v); u8(v >> 8); };
@@ -1002,18 +1026,71 @@ function buildFitCourse(coords, waypoints, name, sport) {
   u8(2); u32(endT); u32(start);
   s32(semi(first.lat)); s32(semi(first.lng)); s32(semi(last.lat)); s32(semi(last.lng));
   u32((endT - start) * 1000); u32((endT - start) * 1000); u32(Math.round(total * 100));
-  // course points (waypoints), snapped to the nearest track vertex
-  const wps = (waypoints || []).slice(0, 100);
-  if (wps.length) {
+  // Course points: ORS turn instructions plus manually added waypoints
+  const coursePoints = [];
+  const fitTypeByOrs = {
+    0:6, 1:7, 2:20, 3:22, 4:19, 5:21,
+    6:8, 7:0, 8:0, 9:23, 12:16, 13:17
+  };
+
+  let segmentOffset = 0;
+  (routeSegments || []).forEach(seg => {
+    const routeCoords = seg.coords || [];
+    if (routeCoords.length < 2) return;
+
+    const localCum = [0];
+    for (let i = 1; i < routeCoords.length; i++) {
+      localCum.push(localCum[i - 1] + haversine(
+        { lat: routeCoords[i - 1][1], lng: routeCoords[i - 1][0] },
+        { lat: routeCoords[i][1], lng: routeCoords[i][0] }
+      ) * 1000);
+    }
+
+    (seg.instructions || []).forEach(step => {
+      const type = Number(step.type);
+      if (!Object.prototype.hasOwnProperty.call(fitTypeByOrs, type)) return;
+
+      const index = Number(step.way_points?.[0]);
+      if (!Number.isInteger(index) || index < 0 || index >= routeCoords.length) return;
+
+      const coord = routeCoords[index];
+      coursePoints.push({
+        distance: segmentOffset + localCum[index],
+        lat: coord[1],
+        lng: coord[0],
+        type: fitTypeByOrs[type],
+        name: step.instruction || step.name || 'Turn'
+      });
+    });
+
+    segmentOffset += localCum[localCum.length - 1];
+  });
+
+  // Keep manual POIs, snapped to their nearest track vertex
+  (waypoints || []).slice(0, 100).forEach(w => {
+    let bi = 0, bd = Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      const d = haversine(pts[i], { lat: w.lat, lng: w.lng });
+      if (d < bd) { bd = d; bi = i; }
+    }
+    coursePoints.push({
+      distance: cum[bi],
+      lat: w.lat,
+      lng: w.lng,
+      type: 0,
+      name: w.name || 'Point'
+    });
+  });
+
+  coursePoints.sort((a, b) => a.distance - b.distance);
+
+  if (coursePoints.length) {
     def(3, 32, [[1,4,0x86],[2,4,0x85],[3,4,0x85],[4,4,0x86],[5,1,0x00],[6,16,0x07]]);
-    wps.forEach(w => {
-      let bi = 0, bd = Infinity;
-      for (let i = 0; i < pts.length; i++) {
-        const d = haversine(pts[i], { lat: w.lat, lng: w.lng });
-        if (d < bd) { bd = d; bi = i; }
-      }
-      u8(3); u32(tAt(cum[bi])); s32(semi(w.lat)); s32(semi(w.lng));
-      u32(Math.round(cum[bi] * 100)); u8(0); str(w.name || 'Point', 16);
+    coursePoints.forEach(cp => {
+      u8(3); u32(tAt(cp.distance));
+      s32(semi(cp.lat)); s32(semi(cp.lng));
+      u32(Math.round(cp.distance * 100));
+      u8(cp.type); str(cp.name, 16);
     });
   }
   // records
@@ -1045,7 +1122,7 @@ document.getElementById('btn-fit').addEventListener('click', () => {
   if (!currentRoute || currentRoute.coordinates.length < 2) return;
   const profile = document.getElementById('profile-select')?.value || 'foot-hiking';
   const sport = profile.startsWith('cycling') ? 2 : profile === 'foot-walking' ? 11 : profile === 'foot-hiking' ? 17 : 0;
-  downloadBytes('trail.fit', buildFitCourse(currentRoute.coordinates, pois, 'My Trail', sport));
+  downloadBytes('trail.fit', buildFitCourse(currentRoute.coordinates, pois, 'My Trail', sport, segments));
   showToast('FIT course exported');
 });
 
